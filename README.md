@@ -467,6 +467,7 @@ function doPost(eventObject) {
 
 - About `protocolVersion`, when it is different between the MCP client and the MCP server, an error occurs. For example, in the current stage, Claude Desktop v0.9.3 uses `protocolVersion` of `2024-11-05`. Under this condition, when the MCP server returns `protocolVersion` of `2025-03-26` to the initialize method, no response is returned from the client.
 - About `result.content` for returning the response from a function, the type of response value depends on the client side. For example, in the case of Claude Desktop, when the type of `array` is used, an error like `Unsupported content type: array`. This might be resolved in the future update.
+- When a large data is sent to the MCP client (Claude Deskop, an error like `result exceeds maximum length of 1048576` occurs. So, please be careful when you send the data to the MCP client. But this might be resolved in the future update.
 
 ---
 
@@ -491,5 +492,9 @@ function doPost(eventObject) {
 - v1.0.0 (May 8, 2025)
 
   1. Initial release.
+
+- v1.0.1 (May 9, 2025)
+
+  1. A bug in the logging was removed.
 
 [TOP](#top)

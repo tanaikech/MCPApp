@@ -1,7 +1,7 @@
 /**
  * Class object for MCP.
  * Author: Kanshi Tanaike
- * version 1.0.0
+ * version 1.0.1
  * @class
  */
 class MCPApp {
@@ -183,6 +183,7 @@ class MCPApp {
   * @private
   */
   log_() {
+    this.values = this.values.map(r => r.map(c => typeof c == "string" ? c.substring(0, 40000) : c));
     this.sheet.getRange(this.sheet.getLastRow() + 1, 1, this.values.length, this.values[0].length).setValues(this.values);
   }
 }
