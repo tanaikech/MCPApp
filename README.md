@@ -465,7 +465,7 @@ function doPost(eventObject) {
 
 # Samples
 
-## 1. Image Transfer: MCP Server (Web Apps/Google Apps Script) to MCP Client (Gemini/Python)
+## Image Transfer: MCP Server (Web Apps/Google Apps Script) to MCP Client (Gemini/Python)
 
 This sample script sends image data to the MCP client. The original post of this is from [https://medium.com/google-cloud/image-transfer-mcp-server-web-apps-google-apps-script-to-mcp-client-gemini-python-1fb22eb89dd2](https://medium.com/google-cloud/image-transfer-mcp-server-web-apps-google-apps-script-to-mcp-client-gemini-python-1fb22eb89dd2).
 
@@ -595,8 +595,6 @@ function doPost(eventObject) {
   return new MCPApp.mcpApp({ accessKey: "sample" }).server(object);
 }
 ```
-
-
 
 # Note
 
