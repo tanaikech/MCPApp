@@ -1,5 +1,3 @@
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/tanaikech-mcpapp-badge.png)](https://mseep.ai/app/tanaikech-mcpapp)
-
 # MCPApp
 
 <a name="top"></a>
@@ -50,6 +48,8 @@ The sample script is as follows: Please copy and paste the following script into
 
 In this sample script, "Tools", "Resources", and "Prompts" are implemented. At "Tools" and "Resources", the response value is created from Google Drive and Google Calendar using the functions and returned to the MCP client.
 
+**From v1.0.2, in order to use MCPApp as a library, LockService is given.**
+
 ```javascript
 /**
  * This function is automatically run when the MCP client accesses Web Apps.
@@ -60,7 +60,7 @@ function doPost(eventObject) {
     serverResponse: getserverResponse_(),
     functions: getFunctions_(),
   };
-  return new MCPApp.mcpApp({ accessKey: "sample" }).server(object);
+  return new MCPApp.mcpApp({ accessKey: "sample" }).setServices({ lock: LockService.getScriptLock() }).server(object);
 }
 ```
 
@@ -631,5 +631,9 @@ function doPost(eventObject) {
 - v1.0.1 (May 9, 2025)
 
   1. A bug in the logging was removed.
+
+- v1.0.2 (May 29, 2025)
+
+  1. From v1.0.2, in order to use MCPApp as a library, LockService is given.
 
 [TOP](#top)

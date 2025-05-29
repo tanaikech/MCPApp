@@ -226,7 +226,7 @@ function getFunctions_() {
  */
 function doPost(eventObject) {
   const object = { eventObject, serverResponse: getserverResponse_(), functions: getFunctions_() };
-  return new MCPApp.mcpApp({ accessKey: "sample" }).server(object);
+  return new MCPApp.mcpApp({ accessKey: "sample" }).setServices({ lock: LockService.getScriptLock() }).server(object);
   
   // If you want to use this library by directly pasting in your script editor, please use the following script.
   // return new MCPApp({ accessKey: "sample" }).server(object);

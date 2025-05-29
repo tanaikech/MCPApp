@@ -1,7 +1,7 @@
 /**
  * Class object for MCP.
  * Author: Kanshi Tanaike
- * version 1.0.1
+ * version 1.0.2
  * @class
  */
 class MCPApp {
@@ -47,6 +47,34 @@ class MCPApp {
 
     /** @private */
     this.values = [];
+
+    this.lock = this.lock || LockService.getScriptLock();
+
+    this.properties = this.properties || PropertiesService.getScriptProperties();
+  }
+
+  /**
+  * ### Description
+  * Set services depend on each script. For example, those are LockService and PropertiesService.
+  * For example, if you don't set these properties, you cannot use this as a library.
+  * If you want to use MCPApp as a library, please set the services.
+  *
+  * In the current stage, only LockService is used and PropertiesService is not used in MCPApp. PropertiesService is for the future update.
+  *
+  * @param {Object} services Array including the services you want to use.
+  * @params {LockService.Lock} services.lock One of LockService.getDocumentLock(), LockService.getScriptLock(), or LockService.getUserLock(). Default is LockService.getScriptLock().
+  * @params {PropertiesService.Properties} services.properties  One of PropertiesService.getDocumentProperties(), PropertiesService.getScriptProperties(), or PropertiesService.getUserProperties(). Default is PropertiesService.getScriptProperties().
+  * @return {MCPApp}
+  */
+  setServices(services) {
+    const { lock, properties } = services;
+    if (lock && lock.toString() == "Lock") {
+      this.lock = lock;
+    }
+    if (properties && lock.toString() == "Properties") {
+      this.properties = properties;
+    }
+    return this;
   }
 
   /**
@@ -61,7 +89,7 @@ class MCPApp {
   */
   server(object) {
     this.errorProcess_(object);
-    const lock = LockService.getScriptLock();
+    const lock = this.lock;
     if (lock.tryLock(350000)) {
       try {
         const res = this.createResponse_(object);

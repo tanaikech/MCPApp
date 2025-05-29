@@ -120,5 +120,5 @@ function doPost(eventObject) {
     serverResponse: getserverResponse_(),
     functions: getFunctions_(),
   };
-  return new MCPApp.mcpApp({ accessKey: "sample" }).server(object);
+  return new MCPApp.mcpApp({ accessKey: "sample" }).setServices({ lock: LockService.getScriptLock() }).server(object);
 }
