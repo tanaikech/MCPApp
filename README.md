@@ -1,5 +1,7 @@
 # MCPApp
 
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/tanaikech-mcpapp-badge.png)](https://mseep.ai/app/tanaikech-mcpapp)
+
 <a name="top"></a>
 [![MIT License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat)](LICENCE)
 
