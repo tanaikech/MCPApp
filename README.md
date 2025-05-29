@@ -350,7 +350,7 @@ This is a simple sample. This script can be tested. But, if you want to create y
 Of course, you can use this library by directly copying and pasting it into your script editor. In that case, please copy and paste the script of this library. And modify as follows.
 
 ```javascript
-return new MCPApp.mcpApp({ accessKey: "sample" }).server(object);
+return new MCPApp.mcpApp({ accessKey: "sample" }).setServices({ lock: LockService.getScriptLock() }).server(object);
 ```
 
 to
@@ -463,7 +463,9 @@ function doPost(eventObject) {
     accessKey: "sample",
     log: true,
     spreadsheetId,
-  }).server(object);
+  })
+  .setServices({ lock: LockService.getScriptLock() })
+  .server(object);
 }
 ```
 
@@ -596,7 +598,7 @@ function doPost(eventObject) {
     serverResponse: getserverResponse_(),
     functions: getFunctions_(),
   };
-  return new MCPApp.mcpApp({ accessKey: "sample" }).server(object);
+  return new MCPApp.mcpApp({ accessKey: "sample" }).setServices({ lock: LockService.getScriptLock() }).server(object);
 }
 ```
 
