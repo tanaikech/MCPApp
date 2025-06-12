@@ -165,7 +165,9 @@ When I tested it, the following result was obtained. I could confirm that the MC
 * Added message ID ###ID2### to Google Sheets.
 ```
 
-## 6. Options
+### Additional information
+
+- If no new emails are found in your Gmail during a demo script run, the script will stop due to `check_process: true`. To continue, please send some emails to your account and rerun the script. The script will then run to completion once new emails are detected in Gmail. I believe this mid-process stop is a crucial feature of MCPApp.
 
 ### Logging
 
