@@ -97,7 +97,7 @@ Please copy and paste the following script to the script editor of "MCPServer2".
 
 ### Another approach
 
-Of course, you can use this library by directly copying and pasting it into your script editor. In that case, please copy and paste the script of this library. And modify as follows.
+Of course, you can use this library by directly copying and pasting it into your script editor. In that case, please copy and paste the script of this library. And modify as follows. And also, please copy and paste [GeminiWithFiles](https://github.com/tanaikech/GeminiWithFiles/blob/master/classGeminiWithFiles.js).
 
 ```javascript
 return new MCPApp.mcpApp({ accessKey: "sample" })
