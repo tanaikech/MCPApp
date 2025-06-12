@@ -1,9 +1,9 @@
 # MCPApp
 
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/tanaikech-mcpapp-badge.png)](https://mseep.ai/app/tanaikech-mcpapp)
-
 <a name="top"></a>
 [![MIT License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat)](LICENCE)
+
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/tanaikech-mcpapp-badge.png)](https://mseep.ai/app/tanaikech-mcpapp)
 
 <a name="overview"></a>
 
@@ -11,19 +11,35 @@
 
 # Overview
 
-This text introduces the Model Context Protocol (MCP) for AI interaction, exploring Google Apps Script (GAS) as a server option. It shows feasibility with a sample but notes the lack of a GAS SDK, aiming to encourage understanding and development.
+The Model Context Protocol (MCP) acts as a universal adapter, letting AI securely access external data. A new Google Apps Script-based MCP network enables AI to interact with Google Workspace (e.g., Docs, Calendar) using existing permissions. This cloud-native solution simplifies integration for rapid prototyping and internal tools.
 
 # Description
 
-The Model Context Protocol (MCP) is an emerging standard acting as a universal adapter for connecting AI applications with external systems and data. This text explores the feasibility of implementing an MCP server using Google Apps Script. Doing so could enable AI to securely access and leverage data within Google Workspace services like Docs, Sheets, and Calendar via a standardized protocol, facilitating AI-powered workflows. A sample script demonstrates this potential despite the lack of an official Google Apps Script SDK. While platform limitations exist, this approach could be valuable for internal or user-centric applications, potentially encouraging dedicated SDK development for deeper AI-Google Workspace integration.
+The Model Context Protocol (MCP) is an emerging standard designed to function as a universal adapter, enabling AI applications to seamlessly and securely connect with external systems and data sources. The core purpose of MCP is to provide a standardized method for AI models to request and receive contextually relevant information, which is crucial for performing complex tasks.
+
+A previous version of this repository successfully demonstrated the feasibility of implementing an MCP server using Google Apps Script. This proof-of-concept confirmed that an Apps Script-based server can allow an AI to securely access, manipulate, and leverage data within Google Workspace services. For instance, it enables an AI agent to summarize a specified Google Doc, find available slots in a user's Google Calendar, or extract data from a Google Sheet, all through a standardized request-response cycle operating within the user's existing security permissions.
+
+The updated version of this repository advances this concept by exploring a complete, end-to-end MCP network built entirely on Google Apps Script. In this architecture, both the MCP servers (which fulfill requests) and the MCP client (which initiates requests on behalf of the AI) are implemented as Google Apps Script web apps. This creates a powerful, self-contained network that operates exclusively within the Google Cloud ecosystem, leveraging Google's native infrastructure for communication and authentication. This "cloud-native" bond eliminates the need for external servers and simplifies credential management.
+
+While this approach is subject to the inherent platform limitations of Google Apps Script, such as execution time limits (e.g., 6 minutes for standard accounts) and API quotas, its value is significant for specific use cases. It is particularly well-suited for rapid prototyping, internal enterprise tools, and user-centric applications where individuals can act as their own data custodians, securely exposing their Workspace data to trusted AI agents without third-party data handling. Ultimately, this successful demonstration underscores the strong demand for deeper AI-Google Workspace integration and makes a compelling case for the development of a dedicated, official SDK to support MCP, which would offer the performance, reliability, and robust features required to unlock its full potential.
 
 # Usage
 
-## 1. Create a Google Apps Script project
+## 1. Create Google Apps Script Projects
 
-Please create a Google Apps Script project of the standalone type. [Ref](https://developers.google.com/apps-script/guides/projects#create-standalone) Of course, the sample script in this report can also be used for the container-bound script type.
+To test the MCP network built with Google Apps Script, we'll aim to achieve the following:
 
-Open the script editor of the created Google Apps Script project.
+**Confirm emails in Gmail, apply relevant labels, create Google Calendar events from those emails, and reply to specific ones. Additionally, we'll save the IDs of processed emails to prevent duplicates in subsequent runs. This entire process will run automatically on a regular basis.**
+
+To accomplish this, we'll utilize both an MCP client and MCP servers:
+
+- **MCPClient:** This client will be automatically triggered by a time-driven event.
+- **MCPServer1:** Manages Gmail operations.
+- **MCPServer2:** Manages Google Calendar operations.
+
+**Please create a new Google Sheet and two standalone Google Apps Script projects.** [Ref](https://developers.google.com/apps-script/guides/projects#create-standalone)
+
+Once created, open the script editors for the Google Sheet and both Google Apps Script projects.
 
 ## 2. Install a library
 
@@ -37,331 +53,58 @@ Open the script editor of the created Google Apps Script project.
 1TlX_L9COAriBlAYvrMLiRFQ5WVf1n0jChB6zHamq2TNwuSbVlI5sBUzh
 ```
 
-In order to simply deploy the MCP server, I created the script as a Google Apps Script library. To use this library, please install the library as follows.
+In order to simply build the MCP network with Google Apps Script, I created the script as a Google Apps Script library. To use this library, please install the library as follows.
 
-1. Create a GAS project: You can use this library for the GAS project of both the standalone type and the container-bound script type.
+1. Open the script editor. In this case, please install this library on both the MCP client and the MCP servers.
 2. [Install this library](https://developers.google.com/apps-script/guides/libraries): The library's project key is **`1TlX_L9COAriBlAYvrMLiRFQ5WVf1n0jChB6zHamq2TNwuSbVlI5sBUzh`**.
 
-## 3. Script
+## 3. Scripts
 
 You can see the whole script, including the library, at my repository. [https://github.com/tanaikech/MCPApp](https://github.com/tanaikech/MCPApp)
 
-The sample script is as follows: Please copy and paste the following script into the script editor and save the script. `MCPApp` is an identifier of the installed library.
+The sample scripts are as follows: Please copy and paste the following scripts for each script editor and save the script. `MCPApp` is an identifier of the installed library.
 
-In this sample script, "Tools", "Resources", and "Prompts" are implemented. At "Tools" and "Resources", the response value is created from Google Drive and Google Calendar using the functions and returned to the MCP client.
+### 1. MCPClient
 
-**From v1.0.2, in order to use MCPApp as a library, LockService is given.**
+Please copy and paste the following script to the script editor of Google Sheets of "MCPClient". And, please set your API key for using the Gemini API. And, set your Web Apps URLs to `mcpServerUrls`.
 
-```javascript
-/**
- * This function is automatically run when the MCP client accesses Web Apps.
- */
-function doPost(eventObject) {
-  const object = {
-    eventObject,
-    serverResponse: getserverResponse_(),
-    functions: getFunctions_(),
-  };
-  return new MCPApp.mcpApp({ accessKey: "sample" }).setServices({ lock: LockService.getScriptLock() }).server(object);
-}
-```
+[https://github.com/tanaikech/MCPApp/blob/master/mcpClient.js](https://github.com/tanaikech/MCPApp/blob/master/mcpClient.js)
 
-The function `getserverResponse_()` is as follows. Please check the comment.
+In the current stage, it seems that the batck process can be used with the MCP server. MCPApp can also use the batch process. When `batchProcess: true` is used in the object for the `client` method, the batch process is used. This might be able to reduce the process cost a little.
 
-```javascript
-/**
- * Please set and modify the following JSON to your situation.
- * The key is the method from the MCP client.
- * The value is the object for returning to the MCP client.
- * ID is automatically set in the script.
- * The specification of this can be seen in the official document.
- * Ref: https://modelcontextprotocol.io/specification/2025-03-26
- */
-function getserverResponse_() {
-  return {
-    /**
-     * Response to "initialize"
-     */
-    initialize: {
-      jsonrpc: "2.0",
-      result: {
-        protocolVersion: "2024-11-05", // or "2025-03-26"
-        capabilities: {
-          experimental: {},
-          prompts: {
-            listChanged: false,
-          },
-          resources: {
-            subscribe: false,
-            listChanged: false,
-          },
-          tools: {
-            listChanged: false,
-          },
-        },
-        serverInfo: {
-          name: "sample server from MCPApp",
-          version: "1.0.0",
-        },
-      },
-    },
+### 2. MCPServer1: For Gmail
 
-    /**
-     * Response to "tools/list"
-     */
-    "tools/list": {
-      jsonrpc: "2.0",
-      result: {
-        tools: [
-          {
-            name: "search_files_on_Google_Drive", // <--- It is required to create a function of the same name as this.
-            description: "Search files on Google Drive.",
-            inputSchema: {
-              type: "object",
-              properties: {
-                folderName: {
-                  description:
-                    "Search files in the folder of this folder name.",
-                  type: "string",
-                },
-              },
-              required: ["folderName"],
-            },
-          },
-          {
-            name: "search_schedule_on_Google_Calendar", // <--- It is required to create a function of the same name as this.
-            description: "Search the schedule on Google Calendar.",
-            inputSchema: {
-              type: "object",
-              properties: {
-                date: {
-                  description:
-                    "Search the schedule on Google Calendar by giving the date.",
-                  type: "string",
-                  format: "date",
-                },
-              },
-              required: ["date"],
-            },
-          },
-        ],
-      },
-    },
+Please copy and paste the following script to the script editor of "MCPServer1". In this sample, the MCP server has no AI agent. So, you can use the sample script of the MCP server without modification.
 
-    /**
-     * Response to "resources/list"
-     */
-    "resources/list": {
-      jsonrpc: "2.0",
-      result: {
-        resources: [
-          {
-            uri: "get_today_schedule", // <--- It is required to create a function of the same name as this.
-            name: "today_schedule",
-            description: "Today's schedule for Tanaike.",
-            mimeType: "text/plain",
-          },
-        ],
-        nextCursor: "next-page-cursor",
-      },
-    },
+[https://github.com/tanaikech/MCPApp/blob/master/mcpServer1.js](https://github.com/tanaikech/MCPApp/blob/master/mcpServer1.js)
 
-    /**
-     * Response to "prompts/list"
-     */
-    "prompts/list": {
-      jsonrpc: "2.0",
-      result: {
-        prompts: [
-          {
-            name: "search_files_from_Google_Drive",
-            description:
-              "Search files in the specific folder on Google Drive using tools.",
-            arguments: [
-              {
-                name: "search_files",
-                description: "Search files.",
-                required: true,
-              },
-            ],
-          },
-        ],
-        nextCursor: "next-page-cursor",
-      },
-    },
+### 3. MCPServer2: For Google Calendar
 
-    /**
-     * Response to "prompts/get"
-     */
-    "prompts/get": {
-      jsonrpc: "2.0",
-      result: {
-        description: "Search files in the specific folder on Google Drive.",
-        messages: [
-          {
-            role: "user",
-            content: {
-              type: "text",
-              text: "Return file information from a folder of 'sample' on Google Drive.",
-            },
-          },
-        ],
-      },
-    },
-  };
-}
-```
+Please copy and paste the following script to the script editor of "MCPServer2". In this sample, the MCP server has no AI agent. So, you can use the sample script of the MCP server without modification.
 
-The function `getFunctions_()` is as follows. Please check the comment. These functions are run when the MCP client calls `tools/call` and `resources/read`.
-
-```javascript
-/**
- * "tools/call": The function name is required to be the same as the name declared at "tools/list".
- * "resources/read": The function name is required to be the same as the uri declared at "resources/list".
- */
-function getFunctions_() {
-  return {
-    "tools/call": {
-      search_files_on_Google_Drive,
-      search_schedule_on_Google_Calendar,
-    },
-    "resources/read": { get_today_schedule },
-  };
-}
-```
-
-Here, `search_files_on_Google_Drive`, `search_schedule_on_Google_Calendar`, and `get_today_schedule` are the functions. The function name is required to be the same as the name declared at "tools/list" and the uri declared at "resources/list". Also, the format of the return value is required to follow the specification of MCP. This is the specification of this script.
-
-The functions are as follows.
-
-```javascript
-/**
- * This function retrieves the file metadata from the specific folder on Google Drive.
- *
- * This function is run by "tools/call".
- * "tools/call": The function name is required to be the same as the name declared at "tools/list".
- */
-function search_files_on_Google_Drive(args) {
-  const { folderName } = args;
-  try {
-    const res = [];
-    const folders = DriveApp.getFoldersByName(folderName);
-    while (folders.hasNext()) {
-      const folder = folders.next();
-      const files = folder.getFiles();
-      while (files.hasNext()) {
-        const file = files.next();
-        res.push({ filename: file.getName(), mimeType: file.getMimeType() });
-      }
-    }
-    const text = res
-      .map(
-        ({ filename, mimeType }) =>
-          `Filename is ${filename}. MimeType is ${mimeType}.`
-      )
-      .join("\n");
-    return {
-      jsonrpc: "2.0",
-      result: { content: [{ type: "text", text }], isError: false },
-    };
-  } catch (err) {
-    return {
-      jsonrpc: "2.0",
-      result: { content: [{ type: "text", text: err.message }], isError: true },
-    };
-  }
-}
-
-/**
- * This function retrieves events from the specific date on Google Calendar.
- *
- * This function is run by "tools/call".
- * "tools/call": The function name is required to be the same as the name declared at "tools/list".
- */
-function search_schedule_on_Google_Calendar(args) {
-  const { date } = args;
-  try {
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(start.getDate() + 1);
-    const events = CalendarApp.getDefaultCalendar().getEvents(start, end); // or CalendarApp.getCalendarById("###").getEvents(start, end);
-    const timeZone = Session.getScriptTimeZone();
-    const text = events
-      .map(
-        (e) =>
-          `${Utilities.formatDate(
-            e.getStartTime(),
-            timeZone,
-            "HH:mm"
-          )}-${Utilities.formatDate(
-            e.getEndTime(),
-            timeZone,
-            "HH:mm"
-          )}: ${e.getTitle()}`
-      )
-      .join("\n");
-    return {
-      jsonrpc: "2.0",
-      result: { content: [{ type: "text", text }], isError: false },
-    };
-  } catch (err) {
-    return {
-      jsonrpc: "2.0",
-      result: { content: [{ type: "text", text: err.message }], isError: true },
-    };
-  }
-}
-
-/**
- * This function retrieves today's events on Google Calendar.
- *
- * This function is run by "resources/read".
- * "resources/read": The function name is required to be the same as the uri declared at "resources/list".
- */
-function get_today_schedule() {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 1);
-  const events = CalendarApp.getDefaultCalendar().getEvents(start, end); // or CalendarApp.getCalendarById("###").getEvents(start, end);
-  const timeZone = Session.getScriptTimeZone();
-  const contents = events.map((e) => ({
-    uri: e.getTitle(),
-    mimeType: "text/plain",
-    text: `${Utilities.formatDate(
-      e.getStartTime(),
-      timeZone,
-      "HH:mm"
-    )}-${Utilities.formatDate(
-      e.getEndTime(),
-      timeZone,
-      "HH:mm"
-    )}: ${e.getTitle()}`,
-  }));
-  return { jsonrpc: "2.0", result: { contents } };
-}
-```
-
-This is a simple sample. This script can be tested. But, if you want to create your MCP server, please modify and create the value of `serverResponse`, and the functions to your situation.
+[https://github.com/tanaikech/MCPApp/blob/master/mcpServer2.js](https://github.com/tanaikech/MCPApp/blob/master/mcpServer2.js)
 
 ### Another approach
 
 Of course, you can use this library by directly copying and pasting it into your script editor. In that case, please copy and paste the script of this library. And modify as follows.
 
 ```javascript
-return new MCPApp.mcpApp({ accessKey: "sample" }).setServices({ lock: LockService.getScriptLock() }).server(object);
+return new MCPApp.mcpApp({ accessKey: "sample" })
+  .setServices({ lock: LockService.getScriptLock() })
+  .server(object);
 ```
 
 to
 
 ```javascript
-return new MCPApp({ accessKey: "sample" }).server(object);
+return new MCPApp({ accessKey: "sample" })
+  .setServices({ lock: LockService.getScriptLock() })
+  .server(object);
 ```
 
-## 4. Web Apps
+## 4. Deploy Web Apps
 
-To allow access from the MCP client, the project uses Web Apps built with Google Apps Script. [Ref](https://developers.google.com/apps-script/guides/web) The MCP client can access the MCP server using an HTTP POST request. Thus, the Web Apps can be used as the MCP server.
+To allow access from the MCP client, the projects for the MCP servers use Web Apps built with Google Apps Script. [Ref](https://developers.google.com/apps-script/guides/web) The MCP client can access the MCP server using an HTTP POST request. Thus, the Web Apps can be used as the MCP server.
 
 Detailed information can be found in [the official documentation](https://developers.google.com/apps-script/guides/web#deploy_a_script_as_a_web_app).
 
@@ -371,14 +114,116 @@ Please follow these steps to deploy the Web App in the script editor.
 2. Click "Select type" -> "Web App".
 3. Enter the information about the Web App in the fields under "Deployment configuration".
 4. Select **"Me"** for **"Execute as"**.
-5. Select **"Anyone"** for **"Who has access to the app:"**. In this sample, a simple approach allows requests without an access token. However, a custom API key is used for accessing the Web App.
+5. Select **"Only myself"** for **"Who has access to the app:"**. In this case, the MCP client requests the MCP server using the access token in the request header. And, no users except for you can access the Web Apps in this setting. If you want to use the MCP servers with the outside of the Google, please set this to "Anyone".
 6. Click "Deploy".
 7. On the script editor, at the top right, click "Deploy" -> "Test deployments".
-8. Copy the Web App URL. It will be similar to `https://script.google.com/macros/s/###/exec`.
+8. Please run the function `getServerURL()` of each server, and copy the Web Apps URL of each server. These Web Apps URLs are used in the MCP client.
 
-**It is important to note that when you modify the Google Apps Script for the Web App, you must modify the deployment as a new version.** This ensures the modified script is reflected in the Web App. Please be careful about this. Also, you can find more details on this in my report "[Redeploying Web Apps without Changing URL of Web Apps for new IDE](https://gist.github.com/tanaikech/ebf92d8f427d02d53989d6c3464a9c43)".
+In the MCP network built by Google Apps Script, the MCP client requests each MCP server with the access token. By this, the server side can save the detailed logs in the console. [Ref](https://github.com/tanaikech/taking-advantage-of-Web-Apps-with-google-apps-script?tab=readme-ov-file#logs-in-web-apps-for-google-apps-script) This might also be one of the advantages of the MCP network built by Google Apps Script.
 
-## 5. Prepare for testing: Claude Desktop
+## 5. Testing
+
+Before running the MCP client, please confirm that your **API key** has been entered into `apiKey` and the **Web App URLs** of the MCP servers have been entered into `mcpServerUrls`. Once confirmed, manually run `mcpClient`. This will open the authorization dialog. Please authorize the necessary scopes.
+
+When `mcpClient` runs, the script performs the following actions:
+
+**It confirms emails in Gmail, applies relevant labels, creates Google Calendar events from those emails, and replies to specific ones. Additionally, it saves the IDs of processed emails to prevent duplicates in subsequent runs. When the time-driven trigger is used, this entire process will run automatically on a regular basis.**
+
+The first time you run `mcpClient`, it retrieves emails from 30 minutes ago until the current time. In subsequent runs, it retrieves emails from the time of the previous run until the current time.
+
+To automate the execution of this function, you can install a time-driven trigger on `mcpClient`. For more information, refer to [Manage Triggers Manually](https://developers.google.com/apps-script/guides/triggers/installable#manage_triggers_manually). Alternatively, if you prefer to manage time-driven triggers programmatically, my library [TriggerApp](https://github.com/tanaikech/TriggerApp) might also be helpful.
+
+When I tested it, the following result was obtained. I could confirm that the MCP client achieved the goal using the 2 MCP servers.
+
+```
+* Retrieved message IDs of processed emails from Google Sheets: ###ID1###, ###ID2###.
+* Retrieved new emails from Gmail since 2025-06-12 00:00:00, excluding processed ones.
+* Identified one new email:
+    * **Thread ID**: ###ID2###
+    * **Title**: "Hi"
+    * **From**: Sample user
+    * **Body**: "Hello. Let's go to lunch together tomorrow. What would you like to eat?"
+* Applied the label "temp" to the new email.
+* Created a draft reply for message ID ###ID2###:
+    * **Content**: "Thanks for the lunch invitation! I'm looking forward to it. I'm pretty flexible, but if I had to choose, I'm always happy with seafood or soba noodles. Let me know what you're thinking! See you tomorrow."
+    * **Draft URL**: [https://URL](https://URL)
+* Created a calendar event:
+    * **Title**: "Lunch with Sample user"
+    * **Time**: 2025-06-13 12:00:00-13:00:00
+    * **Description**: "Let's go to lunch together tomorrow."
+* Added message ID ###ID2### to Google Sheets.
+```
+
+## 6. Options
+
+### Logging
+
+The following logging options are available in this library.
+
+If you want to see the logs between the MCP client and the MCP server, please use the following script. Please prepare a sample Spreadsheet and set the Spreadsheet ID to `spreadsheetId`. Doing this will create a "Log" sheet in the Spreadsheet, and the logs will be stored there. This will be useful for understanding the communication between the MCP client and the MCP server.
+
+For MCP client
+
+```javascript
+const m = new MCPApp.mcpApp({
+  accessKey: "sample",
+  log: true,
+  spreadsheetId: "###",
+}) // Here
+  .client(object);
+```
+
+For MCP server
+
+```javascript
+return new MCPApp.mcpApp({
+  accessKey: "sample",
+  log: true,
+  spreadsheetId: "###",
+}) // Here
+  .setServices({ lock: LockService.getScriptLock() })
+  .server(object);
+```
+
+### Use MCP servers as libraries
+
+In the case of MCPApp, the MCP servers built by Google Apps Script can also be used as the libraries. The sample script is as follows. In this sample, it supposes that the above 2 MCP servers have already been used.
+
+#### Deploy Library
+
+Deploy the Google Apps Script projects for the MCP servers as the library. [Ref](https://developers.google.com/apps-script/guides/libraries#create_and_share_a_library)
+
+#### Client side
+
+Install the libraries of MCP servers to the script editor of the MCP client. The sample script for using this is as follows. By this, the MCP servers are directly used with the MCP client. In this case, the process cost might be able to be reduced a little.
+
+```javascript
+const object = {
+  apiKey: "###",
+  prompt: "###",
+  mcpServerObj: [MCPServer1.items, MCPServer2.items],
+};
+const m = new MCPApp.mcpApp().client(object);
+```
+
+# Summary
+
+- This updated repository confirms that it advances the concept of a **Multi-Cloud Proxy (MCP) network** by presenting a complete, end-to-end solution built entirely on **Google Apps Script**.
+- When this MCP network is used, Google's resources can be accessed safely using an **access token**.
+- It's anticipated that this MCP network will also be able to manage various more complex tasks.
+
+# Note
+
+- You can modify the prompt of the MCP client and the MCP servers. By this, you can adjust the MCP network to your situation.
+
+<details>
+# Additional information
+
+If you want to test the MCP servers using the MCP client except for Google Apps Script, for example, when Claude Desktop is used, the following steps can be used.
+
+## 1. Prepare for testing: Claude Desktop
+
+In this case, it is required to redeploy the Web Apps as `Execute as: Me` and `Who has access to the app: Anyone` and get the Web Apps URLs like`https://script.google.com/macros/s/###/exec`.
 
 To test this Web App, Claude Desktop is used. [Ref](https://claude.ai/download) In this case, the `claude_desktop_config.json` is configured as follows. Please replace `https://script.google.com/macros/s/###/exec` with your Web App URL.
 
@@ -417,57 +262,27 @@ I could also test the MCP server with the Web Apps using Copilot for Visual Stud
 }
 ```
 
-## 6. Testing
+## 2. Testing
 
 When Claude Desktop is run, you can see that `gas_web_apps` of the MCP server is installed as follows.
 
-![](images/fig2.png)
+![](v1/images/fig2.png)
 
 The function `search_files_on_Google_Drive` is called by the `tools/call` method from the MCP client.
 
-![](images/fig3.gif)
+![](v1/images/fig3.gif)
 
 The function `search_schedule_on_Google_Calendar` is called by the `tools/call` method from the MCP client.
 
-![](images/fig4.png)
+![](v1/images/fig4.png)
 
 The function `search_files_from_Google_Drive` is called by the `prompts/get` method from the MCP client.
 
-![](images/fig5.png)
+![](v1/images/fig5.png)
 
 The function `get_today_schedule` is called by the `resources/read` method from the MCP client. In this sample, the 3 events above are loaded.
 
-![](images/fig6.png)
-
-# Options
-
-## 1. Logging
-
-The following logging options are available in this library.
-
-If you want to see the logs between the MCP client and the MCP server, please use the following script. Please prepare a sample Spreadsheet and set the Spreadsheet ID to `spreadsheetId`. Doing this will create a "Log" sheet in the Spreadsheet, and the logs will be stored there. This will be useful for understanding the communication between the MCP client and the MCP server.
-
-```javascript
-/**
- * This function is automatically run when the MCP client accesses Web Apps.
- */
-function doPost(eventObject) {
-  const spreadsheetId = "###"; // Please set the Spreadsheet ID.
-
-  const object = {
-    eventObject,
-    serverResponse: getserverResponse_(),
-    functions: getFunctions_(),
-  };
-  return new MCPApp.mcpApp({
-    accessKey: "sample",
-    log: true,
-    spreadsheetId,
-  })
-  .setServices({ lock: LockService.getScriptLock() })
-  .server(object);
-}
-```
+![](v1/images/fig6.png)
 
 # Samples
 
@@ -598,7 +413,9 @@ function doPost(eventObject) {
     serverResponse: getserverResponse_(),
     functions: getFunctions_(),
   };
-  return new MCPApp.mcpApp({ accessKey: "sample" }).setServices({ lock: LockService.getScriptLock() }).server(object);
+  return new MCPApp.mcpApp({ accessKey: "sample" })
+    .setServices({ lock: LockService.getScriptLock() })
+    .server(object);
 }
 ```
 
@@ -607,6 +424,8 @@ function doPost(eventObject) {
 - About `protocolVersion`, when it is different between the MCP client and the MCP server, an error occurs. For example, in the current stage, Claude Desktop v0.9.3 uses `protocolVersion` of `2024-11-05`. Under this condition, when the MCP server returns `protocolVersion` of `2025-03-26` to the initialize method, no response is returned from the client.
 - About `result.content` for returning the response from a function, the type of response value depends on the client side. For example, in the case of Claude Desktop, when the type of `array` is used, an error like `Unsupported content type: array`. This might be resolved in the future update.
 - When a large data is sent to the MCP client (Claude Deskop, an error like `result exceeds maximum length of 1048576` occurs. So, please be careful when you send the data to the MCP client. But this might be resolved in the future update.
+
+</details>
 
 ---
 
@@ -639,5 +458,9 @@ function doPost(eventObject) {
 - v1.0.2 (May 29, 2025)
 
   1. From v1.0.2, in order to use MCPApp as a library, LockService is given.
+
+- v2.0.0 (June 12, 2025)
+
+  1. From v2.0.0, both the MCP client and the MCP server can be built by Google Apps Script.
 
 [TOP](#top)

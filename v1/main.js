@@ -54,37 +54,8 @@ function setServices(services) {
 * @param {Object} object.eventObject Event object from doPost function.
 * @param {Object} object.serverResponse Object for the server response.
 * @param {Object} object.functions Functions for using at tools/call.
-* @param {Array} object.items Items including serverResponse and functions.
 * @return {ContentService.TextOutput}
 */
 function server(object) {
   return this.mcpApp.server(object);
-}
-
-/**
-* ### Description
-* Method for preparing the MCP client.
-*
-* @param {Object} object Object using this script.
-* @param {String} object.apiKey API key for using Gemini API.
-* @param {String} object.prompt Prompt
-* @param {Array} object.mcpServerUrls MCP server URLs.
-* @param {Boolean} object.batchProcess The default is false. When this is true, the batch process is used from client to servers.
-* @param {Object} object.functions This is custom function at the client side.
-* @param {Array} object.history
-* @return {MCPApp}
-*/
-function client(object) {
-  this.mcpApp.clientObject = object;
-  return this.mcpApp.client(object);
-}
-
-/**
-* ### Description
-* Main method for the MCP client.
-*
-* @return {Object}
-*/
-function callMCPServers() {
-  return this.mcpApp.callMCPServers(this.mcpApp.clientObject);
 }

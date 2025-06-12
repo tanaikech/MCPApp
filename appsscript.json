@@ -1,6 +1,14 @@
 {
   "timeZone": "Asia/Tokyo",
   "dependencies": {
+    "libraries": [
+      {
+        "userSymbol": "MCPApp",
+        "version": "0",
+        "libraryId": "1TlX_L9COAriBlAYvrMLiRFQ5WVf1n0jChB6zHamq2TNwuSbVlI5sBUzh",
+        "developmentMode": true
+      }
+    ]
   },
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8"
