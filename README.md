@@ -23,6 +23,17 @@ The updated version of this repository advances this concept by exploring a comp
 
 While this approach is subject to the inherent platform limitations of Google Apps Script, such as execution time limits (e.g., 6 minutes for standard accounts) and API quotas, its value is significant for specific use cases. It is particularly well-suited for rapid prototyping, internal enterprise tools, and user-centric applications where individuals can act as their own data custodians, securely exposing their Workspace data to trusted AI agents without third-party data handling. Ultimately, this successful demonstration underscores the strong demand for deeper AI-Google Workspace integration and makes a compelling case for the development of a dedicated, official SDK to support MCP, which would offer the performance, reliability, and robust features required to unlock its full potential.
 
+# Flow
+
+The flow chart of this sample is as follows.
+
+```mermaid
+flowchart TD
+    A[MCPClient] -->C{AI agent by Gemini}
+    C -->|For managing Gmail| D[MCPServer1]
+    C -->|For managing Google Calendar| E[MCPServer2]
+```
+
 # Usage
 
 ## 1. Create Google Apps Script Projects
