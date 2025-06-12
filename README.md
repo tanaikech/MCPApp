@@ -79,7 +79,7 @@ The sample scripts are as follows: Please copy and paste the following scripts f
 
 Please copy and paste the following script to the script editor of Google Sheets of "MCPClient". And, please set your API key for using the Gemini API. And, set your Web Apps URLs to `mcpServerUrls`.
 
-[https://github.com/tanaikech/MCPApp/blob/master/mcpClient.js](https://github.com/tanaikech/MCPApp/blob/master/mcpClient.js)
+[https://github.com/tanaikech/MCPApp/blob/master/MCPClient.js](https://github.com/tanaikech/MCPApp/blob/master/MCPClient.js)
 
 In the current stage, it seems that the batck process can be used with the MCP server. MCPApp can also use the batch process. When `batchProcess: true` is used in the object for the `client` method, the batch process is used. This might be able to reduce the process cost a little.
 
@@ -87,13 +87,13 @@ In the current stage, it seems that the batck process can be used with the MCP s
 
 Please copy and paste the following script to the script editor of "MCPServer1". In this sample, the MCP server has no AI agent. So, you can use the sample script of the MCP server without modification.
 
-[https://github.com/tanaikech/MCPApp/blob/master/mcpServer1.js](https://github.com/tanaikech/MCPApp/blob/master/mcpServer1.js)
+[https://github.com/tanaikech/MCPApp/blob/master/MCPServer1.js](https://github.com/tanaikech/MCPApp/blob/master/MCPServer1.js)
 
 ### 3. MCPServer2: For Google Calendar
 
 Please copy and paste the following script to the script editor of "MCPServer2". In this sample, the MCP server has no AI agent. So, you can use the sample script of the MCP server without modification.
 
-[https://github.com/tanaikech/MCPApp/blob/master/mcpServer2.js](https://github.com/tanaikech/MCPApp/blob/master/mcpServer2.js)
+[https://github.com/tanaikech/MCPApp/blob/master/MCPServer2.js](https://github.com/tanaikech/MCPApp/blob/master/MCPServer2.js)
 
 ### Another approach
 
