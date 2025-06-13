@@ -12,16 +12,16 @@ function mcpClient() {
   const now = Date.now();
   const nowStr = Utilities.formatDate(new Date(now), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
   const prop = PropertiesService.getScriptProperties();
-  prop.setProperty("runTime", nowStr);
   let runTime = prop.getProperty("runTime");
   if (!runTime) {
     runTime = Utilities.formatDate(new Date(now - (30 * 60 * 1000)), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
   }
+  prop.setProperty("runTime", nowStr);
   prompt = [
     `Your mission is as follows.`,
     `<Mission>`,
     `1. Get message IDs of the processed messages from Google Sheets.`,
-    `2. Get emails from Gmail. In this case, exclude the messages that have already been processed by checking the message IDs retrieved from Google Sheets. If new messages were not found, stop this process.`,
+    `2. Get emails from Gmail. In this case, exclude the messages that have already been processed by checking the message IDs retrieved from Google Sheets. And, the previous run time of this process is "${runTime}". When you retrieve the messages, retrieve the new messages from "${runTime}" to the current time. Confirm the number of new messages from the history. If new messages were not found, stop this process.`,
     `3. Add the suitable labels to each email by understanding each email body.`,
     `4. Think of suitable messages to reply to each email with the information from "AboutMe" by understanding the message bodies of each sender. And, create them as draft emails. In this case, create the draft emails to the emails from only the emails from the following sender email.<Emails>${emails.join(",")}</Emails>`,
     `5. If it is required to create a schedule by understanding each message body, create events for each message on Google Calendar.`,
@@ -30,7 +30,6 @@ function mcpClient() {
     `</Mission>`,
     `<Important>`,
     `- If an error occurs, stop the process on the way.`,
-    `- Previous run time of the script is "${runTime}". When you retrieve the messages, retrieve the new messages from "${runTime}" to the current time.`,
     `</Important>`,
     `<AboutMe>`,
     `- My name is Tanaike.`,
