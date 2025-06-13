@@ -75,6 +75,37 @@ You can see the whole script, including the library, at my repository. [https://
 
 The sample scripts are as follows: Please copy and paste the following scripts for each script editor and save the script. `MCPApp` is an identifier of the installed library.
 
+If you directly copy the demo files to your Google Drive, the following script can also be used. Please copy and paste the following script into the script editor of Google Apps Script and run the function `myFunction`. By this, the demo files are copied to your Google Drive.
+
+```javascript
+function myFunction() {
+  const dstFolderId = "root"; // Please set your destination folder ID. The default is the root folder.
+
+  // These file IDs are the sample client and servers.
+  const fileIds = [
+    "11gazbixLhyZFs_SFXjKFBDPDOu0zGT4XzOORgKSF6Qw", // MCPClient_demo",
+    "14jtSnPbx7njQvXAdiVMlekLvCWR84F06XF3q2hZ3EvME3lyzwAriFe-t", // MCPServer1_demo: For Gmail",
+    "1RnKQJnZNI3kGOvB3mLmZjn-E9AH8700tptLPYcUqebaOqHBh71mRFT57", // MCPServer2_demo: For Google Calendar"
+  ];
+
+  const folder = DriveApp.getFolderById(dstFolderId);
+  const headers = { authorization: "Bearer " + ScriptApp.getOAuthToken(), "Content-Type": "application/json" };
+  const reqs = fileIds.map(fileId => ({
+    url: `https://www.googleapis.com/drive/v3/files/${fileId}/copy`,
+    headers,
+    payload: JSON.stringify({ parents: [dstFolderId], name: DriveApp.getFileById(fileId).getName() })
+  }));
+  UrlFetchApp.fetchAll(reqs).forEach(res => {
+    const { id } = JSON.parse(res.getContentText());
+    DriveApp.getFileById(id).moveTo(folder);
+  });
+
+  //  If an error is related to Drive API, please enable Drive API v3 at Advanced Google services.
+}
+```
+
+When you test the demo script by manually creating the files, please check the following steps.
+
 ### 1. MCPClient
 
 Please copy and paste the following script to the script editor of Google Sheets of "MCPClient". And, please set your API key for using the Gemini API. And, set your Web Apps URLs to `mcpServerUrls`.
