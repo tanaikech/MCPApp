@@ -2,8 +2,8 @@
  * Class object for MCP.
  * Author: Kanshi Tanaike
  * 
- * 20250611 11:48
- * version 2.0.0
+ * 20250618 11:17
+ * version 2.0.1
  * @class
  */
 class MCPApp {
@@ -168,6 +168,12 @@ class MCPApp {
       try {
         if (obj.params && obj.params.name && m[obj.params.name]) {
           retObj = m[obj.params.name](obj.params?.arguments || null);
+          if (retObj.result && typeof retObj.result == "string") {
+            retObj = {
+              jsonrpc: "2.0",
+              result: { content: [{ type: "text", text: retObj.result }], isError: false },
+            };
+          }
         } else if (obj.params && obj.params.uri && m[obj.params.uri]) {
           retObj = m[obj.params.uri]();
         } else {

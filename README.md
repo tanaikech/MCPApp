@@ -507,4 +507,8 @@ function doPost(eventObject) {
 
   1. From v2.0.0, both the MCP client and the MCP server can be built by Google Apps Script.
 
+- v2.0.1 (June 18, 2025)
+
+  1. A bug was removed.
+
 [TOP](#top)
