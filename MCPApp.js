@@ -2,8 +2,8 @@
  * Class object for MCP.
  * Author: Kanshi Tanaike
  * 
- * 20250618 11:17
- * version 2.0.1
+ * 20250619 10:07
+ * version 2.0.2
  * @class
  */
 class MCPApp {
@@ -168,11 +168,13 @@ class MCPApp {
       try {
         if (obj.params && obj.params.name && m[obj.params.name]) {
           retObj = m[obj.params.name](obj.params?.arguments || null);
-          if (retObj.result && typeof retObj.result == "string") {
+          if (retObj.result && typeof retObj.result == "string" && Object.keys(retObj).length == 1) {
             retObj = {
               jsonrpc: "2.0",
               result: { content: [{ type: "text", text: retObj.result }], isError: false },
             };
+          } else if (retObj.mcp) {
+            retObj = retObj.mcp;
           }
         } else if (obj.params && obj.params.uri && m[obj.params.uri]) {
           retObj = m[obj.params.uri]();
@@ -207,9 +209,13 @@ class MCPApp {
   createResponse_(object) {
     let { eventObject, serverResponse = null, functions = {}, items = [] } = object;
 
-    if (this.accessKey && eventObject.parameter.accessKey && eventObject.parameter.accessKey != this.accessKey) {
-      this.values.push([this.date, method, id, "At server", "Invalid accessKey."]);
-      return null;
+    if (
+      (this.accessKey && !eventObject.parameter.accessKey) ||
+      (this.accessKey && eventObject.parameter.accessKey && eventObject.parameter.accessKey != this.accessKey)
+    ) {
+      this.values.push([this.date, null, null, "At server", "Invalid accessKey."]);
+      const retObj = { "error": { "code": this.ErrorCode.InternalError, "message": "Invalid accessKey." }, "jsonrpc": this.jsonrpc };
+      return ContentService.createTextOutput(JSON.stringify(retObj)).setMimeType(ContentService.MimeType.JSON);
     }
 
     if (items.length > 0 && !serverResponse && Object.keys(functions).length == 0) {
