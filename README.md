@@ -515,4 +515,8 @@ function doPost(eventObject) {
 
   1. A bug was removed.
 
+- v2.0.3 (July 1, 2025)
+
+  1. A bug was removed.
+
 [TOP](#top)

@@ -2,8 +2,8 @@
  * Class object for MCP.
  * Author: Kanshi Tanaike
  * 
- * 20250619 10:07
- * version 2.0.2
+ * 20250701 09:43
+ * version 2.0.3
  * @class
  */
 class MCPApp {
@@ -222,12 +222,22 @@ class MCPApp {
       const oo = items.reduce((o, e) => {
         const type = e.type;
         const [k] = type.split("/");
-        if (o.serverResponse[type]) {
+        if (type != "initialize" && o.serverResponse[type]) {
           o.serverResponse[type].result[k].push(e.value);
         } else {
           let tempObj;
           if (type == "initialize") {
-            tempObj = { jsonrpc: this.jsonrpc, result: e.value };
+            if (o.serverResponse[type]) {
+              let resultObj;
+              if (JSON.stringify(o.serverResponse[type].result).length < JSON.stringify(e.value).length) {
+                resultObj = e.value;
+              } else {
+                resultObj = o.serverResponse[type].result;
+              }
+              tempObj = { jsonrpc: this.jsonrpc, result: resultObj };
+            } else {
+              tempObj = { jsonrpc: this.jsonrpc, result: e.value };
+            }
           } else {
             tempObj = { jsonrpc: this.jsonrpc, result: { [k]: [e.value] } };
           }
