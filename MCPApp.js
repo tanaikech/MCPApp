@@ -2,8 +2,8 @@
  * Class object for MCP.
  * Author: Kanshi Tanaike
  * 
- * 20250701 09:43
- * version 2.0.3
+ * 20250702 09:13
+ * version 2.0.4
  * @class
  */
 class MCPApp {
@@ -219,7 +219,20 @@ class MCPApp {
     }
 
     if (items.length > 0 && !serverResponse && Object.keys(functions).length == 0) {
-      const oo = items.reduce((o, e) => {
+
+      const { dupulicateChecked } = items.reduce((o, e) => {
+        const t = e.type;
+        const n = e.value.name;
+        if (t != "initialize" && o.temp[n]) {
+          console.warn(`"${n}" is duplicated. So, this is removed.`);
+        } else {
+          o.temp[n] = true;
+          o.dupulicateChecked.push(e);
+        }
+        return o;
+      }, { dupulicateChecked: [], temp: {} });
+
+      const oo = dupulicateChecked.reduce((o, e) => {
         const type = e.type;
         const [k] = type.split("/");
         if (type != "initialize" && o.serverResponse[type]) {
