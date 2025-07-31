@@ -2,8 +2,8 @@
  * Class object for MCP.
  * Author: Kanshi Tanaike
  * 
- * 20250702 09:13
- * version 2.0.4
+ * 20250731 09:33
+ * version 2.0.5
  * @class
  */
 class MCPApp {
@@ -219,11 +219,11 @@ class MCPApp {
     }
 
     if (items.length > 0 && !serverResponse && Object.keys(functions).length == 0) {
-
+      const ki = ["initialize", "prompts/list", "prompts/get", "resources/list"];
       const { dupulicateChecked } = items.reduce((o, e) => {
         const t = e.type;
         const n = e.value.name;
-        if (t != "initialize" && o.temp[n]) {
+        if (!ki.includes(t) && o.temp[n]) {
           console.warn(`"${n}" is duplicated. So, this is removed.`);
         } else {
           o.temp[n] = true;
@@ -235,11 +235,47 @@ class MCPApp {
       const oo = dupulicateChecked.reduce((o, e) => {
         const type = e.type;
         const [k] = type.split("/");
-        if (type != "initialize" && o.serverResponse[type]) {
+        if (!ki.includes(type) && o.serverResponse[type]) {
           o.serverResponse[type].result[k].push(e.value);
         } else {
           let tempObj;
           if (type == "initialize") {
+            if (o.serverResponse[type]) {
+              let resultObj;
+              if (JSON.stringify(o.serverResponse[type].result).length < JSON.stringify(e.value).length) {
+                resultObj = e.value;
+              } else {
+                resultObj = o.serverResponse[type].result;
+              }
+              tempObj = { jsonrpc: this.jsonrpc, result: resultObj };
+            } else {
+              tempObj = { jsonrpc: this.jsonrpc, result: e.value };
+            }
+          } else if (type == "prompts/list") {
+            if (o.serverResponse[type]) {
+              let resultObj;
+              if (JSON.stringify(o.serverResponse[type].result).length < JSON.stringify(e.value).length) {
+                resultObj = e.value;
+              } else {
+                resultObj = o.serverResponse[type].result;
+              }
+              tempObj = { jsonrpc: this.jsonrpc, result: resultObj };
+            } else {
+              tempObj = { jsonrpc: this.jsonrpc, result: e.value };
+            }
+          } else if (type == "prompts/get") {
+            if (o.serverResponse[type]) {
+              let resultObj;
+              if (JSON.stringify(o.serverResponse[type].result).length < JSON.stringify(e.value).length) {
+                resultObj = e.value;
+              } else {
+                resultObj = o.serverResponse[type].result;
+              }
+              tempObj = { jsonrpc: this.jsonrpc, result: resultObj };
+            } else {
+              tempObj = { jsonrpc: this.jsonrpc, result: e.value };
+            }
+          } else if (type == "resources/list") {
             if (o.serverResponse[type]) {
               let resultObj;
               if (JSON.stringify(o.serverResponse[type].result).length < JSON.stringify(e.value).length) {
