@@ -34,6 +34,8 @@ flowchart TD
     C -->|For managing Google Calendar| E[MCPServer2]
 ```
 
+# ToolsForMCPServer
+
 **The tools for the MCP server can be obtained at [ToolsForMCPServer](https://github.com/tanaikech/ToolsForMCPServer).** The combination of MCPApp and ToolsForMCPServer will be useful.
 
 # Usage
