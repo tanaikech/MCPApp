@@ -194,7 +194,7 @@ class MCPApp {
       } else {
         retObj = { "error": { "code": this.ErrorCode.InvalidParams, "message": `No prompt name of "${resName}".` }, "jsonrpc": this.jsonrpc };
       }
-      
+
       const data = JSON.stringify(retObj);
       this.values.push([this.date, method, id, "server --> client", data]);
       return retObj;
@@ -244,7 +244,6 @@ class MCPApp {
   */
   createResponse_(object) {
     let { eventObject, serverResponse = null, functions = {}, items = [] } = object;
-
     if (
       (this.accessKey && !eventObject.parameter.accessKey) ||
       (this.accessKey && eventObject.parameter.accessKey && eventObject.parameter.accessKey != this.accessKey)
@@ -290,11 +289,11 @@ class MCPApp {
           } else if (type == "prompts/list") {
             if (o.serverResponse[type]) {
               let resultObj;
-              if (JSON.stringify(o.serverResponse[type].result).length < JSON.stringify(e.value).length) {
-                resultObj = e.value;
-              } else {
-                resultObj = o.serverResponse[type].result;
+              if (o.serverResponse[type].result?.prompts && Array.isArray(o.serverResponse[type].result?.prompts)) {
+                o.serverResponse[type].result.prompts.push(...e.value.prompts);
+                o.serverResponse[type].result.prompts.sort((a, b) => a.name > b.name ? 1 : -1);
               }
+              resultObj = o.serverResponse[type].result;
               tempObj = { jsonrpc: this.jsonrpc, result: resultObj };
             } else {
               tempObj = { jsonrpc: this.jsonrpc, result: e.value };
@@ -372,6 +371,7 @@ class MCPApp {
     } else {
       retObj = this.batchProcess_({ obj, serverResponse, functions });
     }
+
     if (retObj) {
       const data = JSON.stringify(retObj);
       if (Array.isArray(retObj)) {
