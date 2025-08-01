@@ -2,8 +2,8 @@
  * Class object for MCP.
  * Author: Kanshi Tanaike
  * 
- * 20250731 09:33
- * version 2.0.5
+ * 20250801 14:15
+ * version 2.0.6
  * @class
  */
 class MCPApp {
@@ -153,12 +153,48 @@ class MCPApp {
 
     if (serverResponse.hasOwnProperty(method)) {
       let retObj;
-      try {
-        retObj = serverResponse[method];
-      } catch ({ stack }) {
-        retObj = { "error": { "code": this.ErrorCode.InternalError, "message": stack }, "jsonrpc": this.jsonrpc };
+      if (serverResponse[method].result) {
+        try {
+          retObj = serverResponse[method];
+          if (obj.params?.arguments && serverResponse[method].result.messages) {
+            const args = obj.params.arguments;
+            const msg = serverResponse[method].result.messages;
+            Object.entries(args).forEach(([k, v]) => {
+              msg.forEach(m => {
+                if (m.content?.text) {
+                  m.content.text = m.content.text.replace(`{{${k}}}`, v);
+                }
+              });
+            });
+          }
+        } catch ({ stack }) {
+          retObj = { "error": { "code": this.ErrorCode.InternalError, "message": stack }, "jsonrpc": this.jsonrpc };
+        }
+        retObj.id = id;
+        const data = JSON.stringify(retObj);
+        this.values.push([this.date, method, id, "server --> client", data]);
+        return retObj;
       }
-      retObj.id = id;
+
+      const resName = obj.params?.name;
+      const args = obj.params?.arguments;
+      if (serverResponse[method][resName]) {
+        retObj = serverResponse[method][resName];
+        retObj.id = id;
+        if (args && retObj.result?.messages) {
+          const msg = retObj.result.messages;
+          Object.entries(args).forEach(([k, v]) => {
+            msg.forEach(m => {
+              if (m.content?.text) {
+                m.content.text = m.content.text.replace(`{{${k}}}`, v);
+              }
+            });
+          });
+        }
+      } else {
+        retObj = { "error": { "code": this.ErrorCode.InvalidParams, "message": `No prompt name of "${resName}".` }, "jsonrpc": this.jsonrpc };
+      }
+      
       const data = JSON.stringify(retObj);
       this.values.push([this.date, method, id, "server --> client", data]);
       return retObj;
@@ -265,15 +301,29 @@ class MCPApp {
             }
           } else if (type == "prompts/get") {
             if (o.serverResponse[type]) {
-              let resultObj;
-              if (JSON.stringify(o.serverResponse[type].result).length < JSON.stringify(e.value).length) {
-                resultObj = e.value;
+              if (o.serverResponse[type].result) {
+                let resultObj;
+                if (JSON.stringify(o.serverResponse[type].result).length < JSON.stringify(e.value).length) {
+                  resultObj = e.value;
+                } else {
+                  resultObj = o.serverResponse[type].result;
+                }
+                tempObj = { jsonrpc: this.jsonrpc, result: resultObj };
               } else {
-                resultObj = o.serverResponse[type].result;
+                Object.entries(e.value).forEach(([k, v]) => {
+                  o.serverResponse[type][k] = { jsonrpc: this.jsonrpc, result: v };
+                });
+                tempObj = o.serverResponse[type];
               }
-              tempObj = { jsonrpc: this.jsonrpc, result: resultObj };
             } else {
-              tempObj = { jsonrpc: this.jsonrpc, result: e.value };
+              if (e.value.messages) {
+                tempObj = { jsonrpc: this.jsonrpc, result: e.value };
+              } else {
+                tempObj = {};
+                Object.entries(e.value).forEach(([k, v]) => {
+                  tempObj[k] = { jsonrpc: this.jsonrpc, result: v };
+                });
+              }
             }
           } else if (type == "resources/list") {
             if (o.serverResponse[type]) {

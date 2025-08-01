@@ -34,6 +34,8 @@ flowchart TD
     C -->|For managing Google Calendar| E[MCPServer2]
 ```
 
+**The tools for the MCP server can be obtained at [ToolsForMCPServer](https://github.com/tanaikech/ToolsForMCPServer).** The combination of MCPApp and ToolsForMCPServer will be useful.
+
 # Usage
 
 ## 1. Create Google Apps Script Projects
@@ -526,5 +528,9 @@ function doPost(eventObject) {
 - v2.0.5 (July 31, 2025)
 
   1. A bug was removed.
+
+- v2.0.6 (August 1, 2025)
+
+  1. "prompts/get" method was updated.
 
 [TOP](#top)
