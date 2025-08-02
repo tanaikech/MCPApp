@@ -264,6 +264,146 @@ const m = new MCPApp.mcpApp().client(object);
 
 - You can modify the prompt of the MCP client and the MCP servers. By this, you can adjust the MCP network to your situation.
 
+# Sample scripts
+
+## 1. Simple usage of MCP server
+
+You might have a case where you are required to simply test the MCP server. At that time, the following sample script might be useful.
+
+```javascript
+function doPost(eventObject) {
+  const functions = {
+    params_: {
+      function_name1: {
+        description: "Use this for testing a tool 1 of MCP server.",
+        parameters: {
+          type: "object",
+          properties: { sample: { type: "string", description: "Sample value." } },
+          required: ["sample"]
+        }
+      },
+      function_name2: {
+        description: "Use this for testing a tool 2 of MCP server.",
+        parameters: {
+          type: "object",
+          properties: { sample: { type: "string", description: "Sample value." } },
+          required: ["sample"]
+        },
+      }
+    },
+
+    function_name1: (object) => object,
+    function_name2: (object) => object,
+  };
+
+  const items = [
+    {
+      "type": "initialize",
+      "value": {
+        "protocolVersion": "2025-06-18",
+        "capabilities": { "tools": { "listChanged": false }, "prompts": { listChanged: false } },
+        "serverInfo": { "name": "sample_gas_web_apps", "version": "0.0.1" }
+      }
+    },
+    ...Object.keys(functions.params_).map(f => (
+      {
+        "type": "tools/list",
+        "function": functions[f],
+        "value": {
+          name: f,
+          description: functions.params_[f].description,
+          inputSchema: functions.params_[f].parameters,
+        }
+      })),
+
+    {
+      "type": "prompts/list",
+      "value": {
+        "prompts": [
+          {
+            name: "custom1",
+            description: "Custom 1",
+            arguments: [
+              { name: "sample1", description: "sample1", required: true },
+            ],
+          },
+          {
+            name: "custom2",
+            description: "Custom 2",
+            arguments: [
+              { name: "sample2", description: "sample2", required: true },
+            ],
+          },
+        ]
+      }
+    },
+
+    {
+      "type": "prompts/get",
+      "value": {
+        "custom1": {
+          description: "Custom1",
+          messages: [
+            {
+              role: "user",
+              content: {
+                type: "text",
+                text: "Custom1",
+              },
+            },
+          ],
+        },
+        "custom2": {
+          description: "Custom2",
+          messages: [
+            {
+              role: "user",
+              content: {
+                type: "text",
+                text: "Custom2",
+              },
+            },
+          ],
+        },
+      }
+    },
+  ];
+
+  const object = { eventObject, items };
+  return new MCPApp
+    .mcpApp({ accessKey: "sample" })
+    .setServices({ lock: LockService.getScriptLock() })
+    .server(object);
+}
+```
+
+When [Gemini CLI](https://github.com/google-gemini/gemini-cli) is used, please modify `settings.json` as follows.
+
+```json
+{
+  "theme": "Default",
+  "selectedAuthType": "###",
+  "mcpServers": {
+    "gas_web_apps": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://script.google.com/macros/s/###/exec?accessKey=sample"
+      ],
+      "env": {}
+    }
+  }
+}
+```
+
+When the above sample MCP server has been correctly deployed, the following result is obtained.
+
+![](images/fig10.png)
+
+
+
+
+
 <details>
 # Additional information
 
