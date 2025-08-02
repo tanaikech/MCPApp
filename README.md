@@ -398,7 +398,7 @@ When [Gemini CLI](https://github.com/google-gemini/gemini-cli) is used, please m
 
 When the above sample MCP server has been correctly deployed, the following result is obtained.
 
-![](images/fig2.jpg)
+![](images/fig2b.jpg)
 
 
 
