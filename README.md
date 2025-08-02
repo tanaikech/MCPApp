@@ -274,7 +274,7 @@ You might have a case where you are required to simply test the MCP server. At t
 function doPost(eventObject) {
   const functions = {
     params_: {
-      function_name1: {
+      tool1: {
         description: "Use this for testing a tool 1 of MCP server.",
         parameters: {
           type: "object",
@@ -282,7 +282,7 @@ function doPost(eventObject) {
           required: ["sample"]
         }
       },
-      function_name2: {
+      tool2: {
         description: "Use this for testing a tool 2 of MCP server.",
         parameters: {
           type: "object",
@@ -292,8 +292,8 @@ function doPost(eventObject) {
       }
     },
 
-    function_name1: (object) => object,
-    function_name2: (object) => object,
+    tool1: (object) => object,
+    tool2: (object) => object,
   };
 
   const items = [
@@ -317,19 +317,19 @@ function doPost(eventObject) {
       })),
 
     {
-      "type": "prompts/list",
-      "value": {
-        "prompts": [
+      type: "prompts/list",
+      value: {
+        prompts: [
           {
-            name: "custom1",
-            description: "Custom 1",
+            name: "prompt1",
+            description: "Custom prompt 1",
             arguments: [
               { name: "sample1", description: "sample1", required: true },
             ],
           },
           {
-            name: "custom2",
-            description: "Custom 2",
+            name: "prompt2",
+            description: "Custom prompt 2",
             arguments: [
               { name: "sample2", description: "sample2", required: true },
             ],
@@ -339,28 +339,28 @@ function doPost(eventObject) {
     },
 
     {
-      "type": "prompts/get",
-      "value": {
-        "custom1": {
-          description: "Custom1",
+      type: "prompts/get",
+      value: {
+        prompt1: {
+          description: "Custom prompt 1",
           messages: [
             {
               role: "user",
               content: {
                 type: "text",
-                text: "Custom1",
+                text: "Custom prompt 1",
               },
             },
           ],
         },
-        "custom2": {
-          description: "Custom2",
+        prompt2: {
+          description: "Custom prompt 2",
           messages: [
             {
               role: "user",
               content: {
                 type: "text",
-                text: "Custom2",
+                text: "Custom prompt 2",
               },
             },
           ],
