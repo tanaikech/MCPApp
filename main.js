@@ -88,3 +88,13 @@ function client(object) {
 function callMCPServers() {
   return this.mcpApp.callMCPServers(this.mcpApp.clientObject);
 }
+
+/**
+ * ### Description
+ * Return HtmlService.HtmlOutput for UI of MCP client.
+ *
+ * @return {HtmlService.HtmlOutput}
+ */
+function getClientIndex() {
+  return HtmlService.createHtmlOutputFromFile("index_client").setTitle("MCP client from MCPApp");
+}
