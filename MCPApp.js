@@ -2,8 +2,8 @@
  * Class object for MCP.
  * Author: Kanshi Tanaike
  * 
- * 20250806 10:08
- * version 2.0.7
+ * 20250806 14:14
+ * version 2.0.8
  * @class
  */
 class MCPApp {
@@ -114,20 +114,16 @@ class MCPApp {
   server(object = {}) {
     this.errorProcessForServer_(object);
 
-    if (this.useLock === true) {
-      const lock = this.lock;
-      if (lock.tryLock(350000)) {
-        try {
-          return this.serverMain_(object);
-        } catch ({ stack }) {
-          throw new Error(stack);
-        } finally {
-          lock.releaseLock();
-        }
-      } else {
-        throw new Error("Timeout.");
-      }
+    const obj = this.parseObj_(object.eventObject);
+    const ki = ["initialize", "notifications/initialized", "tools/list", "prompts/list", "resources/list"];
+    if (obj.method && ki.includes(obj.method)) {
+      return this.lockedMethod_(object);
     }
+
+    if (this.useLock === true) {
+      return this.lockedMethod_(object);
+    }
+
     try {
       return this.serverMain_(object);
     } catch ({ stack }) {
@@ -139,6 +135,23 @@ class MCPApp {
     const res = this.createResponse_(object);
     if (this.log) {
       this.log_();
+    }
+    return res;
+  }
+
+  lockedMethod_(object) {
+    let res;
+    const lock = this.lock;
+    if (lock.tryLock(350000)) {
+      try {
+        res = this.serverMain_(object);
+      } catch ({ stack }) {
+        throw new Error(stack);
+      } finally {
+        lock.releaseLock();
+      }
+    } else {
+      throw new Error("Timeout.");
     }
     return res;
   }
