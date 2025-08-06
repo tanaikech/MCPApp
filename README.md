@@ -78,6 +78,8 @@ This repository introduces two directions:
 
 - v2.0.7 (August 6, 2025)
 
-  1. From v2.0.7, LockService can be selectively set with and without using it.
+  1. Starting with v2.0.7, you can now selectively enable or disable the **LockService**.
+    - By default, this library runs with the LockService enabled. To disable it, simply modify `return new MCPApp.mcpApp({ accessKey: "sample" })` to `return new MCPApp.mcpApp({ accessKey: "sample", lock: false })`.
+    - When the LockService is disabled (`lock: false`), asynchronous requests from clients like the Gemini CLI may see an increase in processing speed. However, it's important to note that the maximum number of concurrent requests must not exceed 30. Please use this option with caution.
 
 [TOP](#top)

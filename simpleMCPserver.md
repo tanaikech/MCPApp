@@ -75,7 +75,10 @@ The tools and prompts are provided by ToolsForMCPServer.
 - If an error related to Drive API occurred, please enable Drive API at Advanced Google services.
 - **If you want to manage Docs, Sheets, Slides, and Calendars using the batch update methods of API, please enable Docs API, Sheets API, Slides API, and Calendar API at Advanced Google services.**
 - If you want to use the specific Google Calendar, please set `defaultCalendarId`.
-- As the default, this library is run with LockService. But, when you modify `return new MCPApp.mcpApp({ accessKey: "sample" })` to `return new MCPApp.mcpApp({ accessKey: "sample", lock: false })`, the library is run without LockService.
+
+- Starting with v2.0.7, you can now selectively enable or disable the **LockService**.
+  - By default, this library runs with the LockService enabled. To disable it, simply modify `return new MCPApp.mcpApp({ accessKey: "sample" })` to `return new MCPApp.mcpApp({ accessKey: "sample", lock: false })`.
+  - When the LockService is disabled (`lock: false`), asynchronous requests from clients like the Gemini CLI may see an increase in processing speed. However, it's important to note that the maximum number of concurrent requests must not exceed 30. Please use this option with caution.
 
 ### MCP server with ToolsForMCPServer and your custom tools and prompts
 
