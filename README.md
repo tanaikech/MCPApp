@@ -76,4 +76,8 @@ This repository introduces two directions:
 
   1. "prompts/get" method was updated.
 
+- v2.0.7 (August 6, 2025)
+
+  1. From v2.0.7, LockService can be selectively set with and without using it.
+
 [TOP](#top)

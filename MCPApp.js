@@ -2,8 +2,8 @@
  * Class object for MCP.
  * Author: Kanshi Tanaike
  * 
- * 20250801 14:15
- * version 2.0.6
+ * 20250806 10:08
+ * version 2.0.7
  * @class
  */
 class MCPApp {
@@ -13,10 +13,11 @@ class MCPApp {
   * @param {String} object.accessKey Default is no value. This key is used for accessing the Web Apps.
   * @param {Boolean} object.log Default is false. When this is true, the log between MCP client and MCP server is stored to Google Sheets.
   * @param {String} object.spreadsheetId Spreadsheet ID. Log is storead to "Log" sheet of this spreadsheet.
+  * @param {Boolean} object.lock Default is true. As the default, the script is run with LockService. When this is false, the script is run without LockService.
   * @return {ContentService.TextOutput}
   */
   constructor(object = {}) {
-    const { accessKey = null, log = false, spreadsheetId } = object;
+    const { accessKey = null, log = false, spreadsheetId, lock = true } = object;
 
     /** @private */
     this.accessKey = accessKey;
@@ -60,6 +61,9 @@ class MCPApp {
     this.values = [];
 
     this.lock = this.lock || LockService.getScriptLock();
+
+    /** @private */
+    this.useLock = lock;
 
     /** @private */
     this.clientObject = {};
@@ -109,22 +113,34 @@ class MCPApp {
   */
   server(object = {}) {
     this.errorProcessForServer_(object);
-    const lock = this.lock;
-    if (lock.tryLock(350000)) {
-      try {
-        const res = this.createResponse_(object);
-        if (this.log) {
-          this.log_();
+
+    if (this.useLock === true) {
+      const lock = this.lock;
+      if (lock.tryLock(350000)) {
+        try {
+          return this.serverMain_(object);
+        } catch ({ stack }) {
+          throw new Error(stack);
+        } finally {
+          lock.releaseLock();
         }
-        return res;
-      } catch ({ stack }) {
-        throw new Error(stack);
-      } finally {
-        lock.releaseLock();
+      } else {
+        throw new Error("Timeout.");
       }
-    } else {
-      throw new Error("Timeout.");
     }
+    try {
+      return this.serverMain_(object);
+    } catch ({ stack }) {
+      throw new Error(stack);
+    }
+  }
+
+  serverMain_(object) {
+    const res = this.createResponse_(object);
+    if (this.log) {
+      this.log_();
+    }
+    return res;
   }
 
   /**

@@ -75,6 +75,7 @@ The tools and prompts are provided by ToolsForMCPServer.
 - If an error related to Drive API occurred, please enable Drive API at Advanced Google services.
 - **If you want to manage Docs, Sheets, Slides, and Calendars using the batch update methods of API, please enable Docs API, Sheets API, Slides API, and Calendar API at Advanced Google services.**
 - If you want to use the specific Google Calendar, please set `defaultCalendarId`.
+- As the default, this library is run with LockService. But, when you modify `return new MCPApp.mcpApp({ accessKey: "sample" })` to `return new MCPApp.mcpApp({ accessKey: "sample", lock: false })`, the library is run without LockService.
 
 ### MCP server with ToolsForMCPServer and your custom tools and prompts
 

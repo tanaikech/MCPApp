@@ -11,8 +11,10 @@ var appName = "MCPApp";
  * Main Class
  * 
  * @param {Object} object Object using this script.
+ * @param {String} object.accessKey Default is no value. This key is used for accessing the Web Apps.
  * @param {Boolean} object.log Default is false. When this is true, the log between MCP client and MCP server is stored to Google Sheets.
  * @param {String} object.spreadsheetId Spreadsheet ID. Log is storead to "Log" sheet of this spreadsheet.
+ * @param {Boolean} object.lock Default is true. As the default, the script is run with LockService. When this is false, the script is run without LockService.
  * @returns {MCPApp}
  */
 function mcpApp(object) {
