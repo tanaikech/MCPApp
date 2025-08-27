@@ -330,12 +330,8 @@ When [Gemini CLI](https://github.com/google-gemini/gemini-cli) is used, please m
   "selectedAuthType": "###",
   "mcpServers": {
     "gas_web_apps": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://script.google.com/macros/s/###/exec?accessKey=sample"
-      ],
-      "env": {}
+      "httpUrl": "https://script.google.com/macros/s/###/exec?accessKey=sample",
+      "description": "MCP server built by Google Apps Script Web Apps"
     }
   }
 }
