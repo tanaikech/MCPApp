@@ -1,42 +1,45 @@
 /**
- * Class object for MCP.
+ * Class object for MCP (Model Context Protocol).
  * Author: Kanshi Tanaike
- * 
- * 20250806 14:14
- * version 2.0.8
+ * Version: 2.0.10
+ * Date: 2026-05-09 15:22
  * @class
  */
 class MCPApp {
-
   /**
-  * @param {Object} object Object using this script.
-  * @param {String} object.accessKey Default is no value. This key is used for accessing the Web Apps.
-  * @param {Boolean} object.log Default is false. When this is true, the log between MCP client and MCP server is stored to Google Sheets.
-  * @param {String} object.spreadsheetId Spreadsheet ID. Log is storead to "Log" sheet of this spreadsheet.
-  * @param {Boolean} object.lock Default is true. As the default, the script is run with LockService. When this is false, the script is run without LockService.
-  * @return {ContentService.TextOutput}
-  */
+   * @param {Object} object - Object used to initialize this script.
+   * @param {string} [object.accessKey=null] - Default is null. Used for accessing the Web Apps.
+   * @param {boolean} [object.log=false] - Default is false. When true, the log between the MCP client and server is stored in Google Sheets.
+   * @param {string} [object.spreadsheetId] - Spreadsheet ID. Logs are stored in the "log" sheet of this spreadsheet.
+   * @param {boolean} [object.lock=true] - Default is true. By default, the script runs with LockService to prevent concurrency issues.
+   * @return {MCPApp}
+   */
   constructor(object = {}) {
-    const { accessKey = null, log = false, spreadsheetId, lock = true } = object;
+    const {
+      accessKey = null,
+      log = false,
+      spreadsheetId = null,
+      lock = true,
+    } = object;
 
     /** @private */
     this.accessKey = accessKey;
 
-    /** 
-     * ref: https://modelcontextprotocol.io/docs/concepts/architecture#error-handling
+    /**
+     * Standard JSON-RPC error codes.
+     * @see https://modelcontextprotocol.io/docs/concepts/architecture#error-handling
      * @private
      */
     this.ErrorCode = {
-      // Standard JSON-RPC error codes
       ParseError: -32700,
       InvalidRequest: -32600,
       MethodNotFound: -32601,
       InvalidParams: -32602,
       InternalError: -32603,
-    }
+    };
 
     /** @private */
-    this.protocolVersion = "2024-11-05"; // or "2025-03-26"
+    this.protocolVersion = "2024-11-05"; // Alternatively "2025-03-26"
 
     /** @private */
     this.jsonrpc = "2.0";
@@ -51,7 +54,9 @@ class MCPApp {
     this.log = log;
 
     if (this.log) {
-      const ss = spreadsheetId ? SpreadsheetApp.openById(spreadsheetId) : SpreadsheetApp.create("Log_MCPApp");
+      const ss = spreadsheetId
+        ? SpreadsheetApp.openById(spreadsheetId)
+        : SpreadsheetApp.create("Log_MCPApp");
 
       /** @private */
       this.sheet = ss.getSheetByName("log") || ss.insertSheet("log");
@@ -60,77 +65,85 @@ class MCPApp {
     /** @private */
     this.values = [];
 
-    this.lock = this.lock || LockService.getScriptLock();
-
     /** @private */
     this.useLock = lock;
 
+    this.lock = LockService.getScriptLock();
+
     /** @private */
     this.clientObject = {};
-
-    // This is not still used. This is for the future update.
-    // this.properties = this.properties || PropertiesService.getScriptProperties();
   }
 
   /**
-  * ### Description
-  * Set services depend on each script. For example, those are LockService and PropertiesService.
-  * For example, if you don't set these properties, you cannot use this as a library.
-  * If you want to use MCPApp as a library, please set the services.
-  *
-  * In the current stage, only LockService is used and PropertiesService is not used in MCPApp. PropertiesService is for the future update.
-  *
-  * @param {Object} services Array including the services you want to use.
-  * @params {LockService.Lock} services.lock One of LockService.getDocumentLock(), LockService.getScriptLock(), or LockService.getUserLock(). Default is LockService.getScriptLock().
-  * @params {PropertiesService.Properties} services.properties  One of PropertiesService.getDocumentProperties(), PropertiesService.getScriptProperties(), or PropertiesService.getUserProperties(). Default is PropertiesService.getScriptProperties().
-  * @return {MCPApp}
-  */
-  setServices(services) {
+   * ### Description
+   * Sets services dependent on each script environment, such as LockService and PropertiesService.
+   * Set these services if utilizing MCPApp as a library.
+   *
+   * @param {Object} services - Object containing the services you want to use.
+   * @param {GoogleAppsScript.Lock.Lock}[services.lock] - Instance of LockService (e.g., getScriptLock()).
+   * @param {GoogleAppsScript.Properties.Properties} [services.properties] - Instance of PropertiesService.
+   * @return {MCPApp}
+   */
+  setServices(services = {}) {
     const { lock, properties } = services;
-    if (lock && lock.toString() == "Lock") {
+    if (lock && lock.toString() === "Lock") {
       this.lock = lock;
     }
-    if (properties && lock.toString() == "Properties") {
+    if (properties && properties.toString() === "Properties") {
       this.properties = properties;
     }
     return this;
   }
 
   /*****************************************************************************************************
-  * For server
-  */
+   * SERVER METHODS
+   *****************************************************************************************************/
 
   /**
-  * ### Description
-  * Method for the MCP server.
-  *
-  * @param {Object} object Object using this script.
-  * @param {Object} object.eventObject Event object from doPost function.
-  * @param {Object} object.serverResponse Object for the server response.
-  * @param {Object} object.functions Functions for using at tools/call.
-  * @param {Array} object.items Items including serverResponse and functions.
-  * @return {ContentService.TextOutput}
-  */
+   * ### Description
+   * Main entry method for the MCP server.
+   *
+   * @param {Object} object - Execution object.
+   * @param {Object} object.eventObject - Event object from the doPost function.
+   * @param {Object} object.serverResponse - Object structured for the server response.
+   * @param {Object} object.functions - Functions mapped for usage via tools/call.
+   * @param {Array}  object.items - Items including server responses and functions.
+   * @return {GoogleAppsScript.Content.TextOutput}
+   */
   server(object = {}) {
     this.errorProcessForServer_(object);
 
     const obj = this.parseObj_(object.eventObject);
-    const ki = ["initialize", "notifications/initialized", "tools/list", "prompts/list", "resources/list"];
-    if (obj.method && ki.includes(obj.method)) {
-      return this.lockedMethod_(object);
-    }
+    const lockedMethods = [
+      "initialize",
+      "notifications/initialized",
+      "tools/list",
+      "prompts/list",
+      "resources/list",
+    ];
 
-    if (this.useLock === true) {
+    if (
+      (obj?.method && lockedMethods.includes(obj.method)) ||
+      this.useLock === true
+    ) {
       return this.lockedMethod_(object);
     }
 
     try {
       return this.serverMain_(object);
     } catch ({ stack }) {
-      throw new Error(stack);
+      throw new Error(`Server Execution Error: ${stack}`);
     }
   }
 
+  /**
+   * ### Description
+   * Core server logic execution.
+   *
+   * @param {Object} object
+   * @return {GoogleAppsScript.Content.TextOutput}
+   * @private
+   */
   serverMain_(object) {
     const res = this.createResponse_(object);
     if (this.log) {
@@ -139,738 +152,992 @@ class MCPApp {
     return res;
   }
 
+  /**
+   * ### Description
+   * Executes the server logic under a lock state to prevent concurrency overlaps.
+   *
+   * @param {Object} object
+   * @return {GoogleAppsScript.Content.TextOutput}
+   * @private
+   */
   lockedMethod_(object) {
-    let res;
     const lock = this.lock;
-    if (lock.tryLock(350000)) {
-      try {
-        res = this.serverMain_(object);
-      } catch ({ stack }) {
-        throw new Error(stack);
-      } finally {
-        lock.releaseLock();
-      }
-    } else {
-      throw new Error("Timeout.");
+    if (!lock.tryLock(350000)) {
+      throw new Error("Timeout: Could not acquire lock.");
     }
-    return res;
+    try {
+      return this.serverMain_(object);
+    } catch ({ stack }) {
+      throw new Error(`Locked Execution Error: ${stack}`);
+    } finally {
+      lock.releaseLock();
+    }
   }
 
   /**
-  * ### Description
-  * Check parameters for server.
-  *
-  * @param {Object} object Object using this script.
-  * @return {void}
-  * @private
-  */
+   * ### Description
+   * Validates the initialization parameters for the server.
+   *
+   * @param {Object} object
+   * @return {void}
+   * @private
+   */
   errorProcessForServer_(object) {
     if (!object.eventObject) {
-      throw new Error("Please set event object from doPost.");
+      throw new Error(
+        "Missing 'eventObject'. Please pass the event object from doPost().",
+      );
     }
     if (!object.serverResponse && !object.items) {
-      throw new Error("Please set your server object to MCP client.");
+      throw new Error(
+        "Missing 'serverResponse' or 'items'. Please set your server object configurations.",
+      );
     }
   }
 
+  /**
+   * ### Description
+   * Replaces variables mapped in arguments into the target message content.
+   *
+   * @param {Array} messages - Message array to modify.
+   * @param {Object} args - Arguments dictionary containing keys and replacement values.
+   * @private
+   */
+  replaceTemplateVariables_(messages, args) {
+    if (!messages || !args) return;
+    Object.entries(args).forEach(([key, value]) => {
+      messages.forEach((msg) => {
+        if (msg.content?.text) {
+          msg.content.text = msg.content.text.replaceAll(
+            `{{${key}}}`,
+            String(value),
+          );
+        }
+      });
+    });
+  }
+
+  /**
+   * ### Description
+   * Handles batch processing of individual JSON-RPC calls.
+   *
+   * @param {Object} object
+   * @return {Object|null}
+   * @private
+   */
   batchProcess_(object) {
     const { obj, serverResponse, functions } = object;
-    if (!obj.hasOwnProperty("method")) return null;
-    const method = obj.method.toLowerCase();
-    const id = obj.hasOwnProperty("id") ? obj.id : "No ID";
-    this.values.push([this.date, method, id, "client --> server", JSON.stringify(obj)]);
+    if (!obj || !("method" in obj)) return null;
 
-    if (serverResponse.hasOwnProperty(method)) {
-      let retObj;
+    const method = obj.method.toLowerCase();
+    const id = obj.id ?? "No ID";
+    this.values.push([
+      this.date,
+      method,
+      id,
+      "client --> server",
+      JSON.stringify(obj),
+    ]);
+
+    let retObj;
+
+    // Handle standard server responses
+    if (serverResponse && method in serverResponse) {
       if (serverResponse[method].result) {
         try {
           retObj = serverResponse[method];
-          if (obj.params?.arguments && serverResponse[method].result.messages) {
-            const args = obj.params.arguments;
-            const msg = serverResponse[method].result.messages;
-            Object.entries(args).forEach(([k, v]) => {
-              msg.forEach(m => {
-                if (m.content?.text) {
-                  m.content.text = m.content.text.replace(`{{${k}}}`, v);
-                }
-              });
-            });
-          }
+          this.replaceTemplateVariables_(
+            retObj.result?.messages,
+            obj.params?.arguments,
+          );
         } catch ({ stack }) {
-          retObj = { "error": { "code": this.ErrorCode.InternalError, "message": stack }, "jsonrpc": this.jsonrpc };
+          retObj = {
+            error: { code: this.ErrorCode.InternalError, message: stack },
+            jsonrpc: this.jsonrpc,
+          };
         }
         retObj.id = id;
-        const data = JSON.stringify(retObj);
-        this.values.push([this.date, method, id, "server --> client", data]);
+        this.values.push([
+          this.date,
+          method,
+          id,
+          "server --> client",
+          JSON.stringify(retObj),
+        ]);
         return retObj;
       }
 
+      // Handle named prompt execution
       const resName = obj.params?.name;
-      const args = obj.params?.arguments;
-      if (serverResponse[method][resName]) {
+      if (resName && serverResponse[method][resName]) {
         retObj = serverResponse[method][resName];
         retObj.id = id;
-        if (args && retObj.result?.messages) {
-          const msg = retObj.result.messages;
-          Object.entries(args).forEach(([k, v]) => {
-            msg.forEach(m => {
-              if (m.content?.text) {
-                m.content.text = m.content.text.replace(`{{${k}}}`, v);
-              }
-            });
-          });
-        }
+        this.replaceTemplateVariables_(
+          retObj.result?.messages,
+          obj.params?.arguments,
+        );
       } else {
-        retObj = { "error": { "code": this.ErrorCode.InvalidParams, "message": `No prompt name of "${resName}".` }, "jsonrpc": this.jsonrpc };
+        retObj = {
+          error: {
+            code: this.ErrorCode.InvalidParams,
+            message: `No prompt found with name "${resName}".`,
+          },
+          jsonrpc: this.jsonrpc,
+          id,
+        };
       }
 
-      const data = JSON.stringify(retObj);
-      this.values.push([this.date, method, id, "server --> client", data]);
+      this.values.push([
+        this.date,
+        method,
+        id,
+        "server --> client",
+        JSON.stringify(retObj),
+      ]);
       return retObj;
-    } else if (functions && functions.hasOwnProperty(method)) {
-      const m = functions[method];
-      let retObj;
+    }
+
+    // Handle function executions via Tools
+    if (functions && method in functions) {
+      const funcGroup = functions[method];
       try {
-        if (obj.params && obj.params.name && m[obj.params.name]) {
-          retObj = m[obj.params.name](obj.params?.arguments || null);
-          if (retObj.result && typeof retObj.result == "string" && Object.keys(retObj).length == 1) {
+        const paramName = obj.params?.name;
+        const paramUri = obj.params?.uri;
+
+        if (paramName && funcGroup[paramName]) {
+          retObj = funcGroup[paramName](obj.params?.arguments || null);
+          if (
+            retObj?.result &&
+            typeof retObj.result === "string" &&
+            Object.keys(retObj).length === 1
+          ) {
             retObj = {
-              jsonrpc: "2.0",
-              result: { content: [{ type: "text", text: retObj.result }], isError: false },
+              jsonrpc: this.jsonrpc,
+              result: {
+                content: [{ type: "text", text: retObj.result }],
+                isError: false,
+              },
             };
-          } else if (retObj.mcp) {
+          } else if (retObj?.mcp) {
             retObj = retObj.mcp;
           }
-        } else if (obj.params && obj.params.uri && m[obj.params.uri]) {
-          retObj = m[obj.params.uri]();
+        } else if (paramUri && funcGroup[paramUri]) {
+          retObj = funcGroup[paramUri]();
         } else {
-          retObj = { "error": { "code": this.ErrorCode.InternalError, "message": `${method} didn't work.` }, "jsonrpc": this.jsonrpc };
+          retObj = {
+            error: {
+              code: this.ErrorCode.MethodNotFound,
+              message: `Method or Function "${method}" could not be executed.`,
+            },
+            jsonrpc: this.jsonrpc,
+          };
         }
       } catch ({ stack }) {
-        retObj = { "error": { "code": this.ErrorCode.InternalError, "message": stack }, "jsonrpc": this.jsonrpc };
+        retObj = {
+          error: { code: this.ErrorCode.InternalError, message: stack },
+          jsonrpc: this.jsonrpc,
+        };
       }
       retObj.id = id;
-      const data = JSON.stringify(retObj);
-      this.values.push([this.date, method, id, "server --> client", data]);
+      this.values.push([
+        this.date,
+        method,
+        id,
+        "server --> client",
+        JSON.stringify(retObj),
+      ]);
       return retObj;
-    } else {
-      this.values.push([this.date, method, id, "server --> client", `Return no value to ID ${id}.`]);
     }
+
+    // Fallback if no processor found
+    this.values.push([
+      this.date,
+      method,
+      id,
+      "server --> client",
+      `No return value mapped for ID ${id}.`,
+    ]);
     return null;
   }
 
   /**
-  * ### Description
-  * Create the response to MCP client.
-  *
-  * @param {Object} object Object using this script.
-  * @param {Object} object.eventObject Event object from doPost function.
-  * @param {Object} object.serverResponse Object for the server response.
-  * @param {Object} object.functions Functions for using at tools/call.
-  * @param {Array} object.items Items including serverResponse and functions.
-  * @return {ContentService.TextOutput}
-  * @private
-  */
-  createResponse_(object) {
-    let { eventObject, serverResponse = null, functions = {}, items = [] } = object;
-    if (
-      (this.accessKey && !eventObject.parameter.accessKey) ||
-      (this.accessKey && eventObject.parameter.accessKey && eventObject.parameter.accessKey != this.accessKey)
-    ) {
-      this.values.push([this.date, null, null, "At server", "Invalid accessKey."]);
-      const retObj = { "error": { "code": this.ErrorCode.InternalError, "message": "Invalid accessKey." }, "jsonrpc": this.jsonrpc };
-      return ContentService.createTextOutput(JSON.stringify(retObj)).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (items.length > 0 && !serverResponse && Object.keys(functions).length == 0) {
-      const ki = ["initialize", "prompts/list", "prompts/get", "resources/list"];
-      const { dupulicateChecked } = items.reduce((o, e) => {
-        const t = e.type;
-        const n = e.value.name;
-        if (!ki.includes(t) && o.temp[n]) {
-          console.warn(`"${n}" is duplicated. So, this is removed.`);
-        } else {
-          o.temp[n] = true;
-          o.dupulicateChecked.push(e);
-        }
-        return o;
-      }, { dupulicateChecked: [], temp: {} });
-
-      const oo = dupulicateChecked.reduce((o, e) => {
-        const type = e.type;
-        const [k] = type.split("/");
-        if (!ki.includes(type) && o.serverResponse[type]) {
-          o.serverResponse[type].result[k].push(e.value);
-        } else {
-          let tempObj;
-          if (type == "initialize") {
-            if (o.serverResponse[type]) {
-              let resultObj;
-              if (JSON.stringify(o.serverResponse[type].result).length < JSON.stringify(e.value).length) {
-                resultObj = e.value;
-              } else {
-                resultObj = o.serverResponse[type].result;
-              }
-              tempObj = { jsonrpc: this.jsonrpc, result: resultObj };
-            } else {
-              tempObj = { jsonrpc: this.jsonrpc, result: e.value };
-            }
-          } else if (type == "prompts/list") {
-            if (o.serverResponse[type]) {
-              let resultObj;
-              if (o.serverResponse[type].result?.prompts && Array.isArray(o.serverResponse[type].result?.prompts)) {
-                o.serverResponse[type].result.prompts.push(...e.value.prompts);
-                o.serverResponse[type].result.prompts.sort((a, b) => a.name > b.name ? 1 : -1);
-              }
-              resultObj = o.serverResponse[type].result;
-              tempObj = { jsonrpc: this.jsonrpc, result: resultObj };
-            } else {
-              tempObj = { jsonrpc: this.jsonrpc, result: e.value };
-            }
-          } else if (type == "prompts/get") {
-            if (o.serverResponse[type]) {
-              if (o.serverResponse[type].result) {
-                let resultObj;
-                if (JSON.stringify(o.serverResponse[type].result).length < JSON.stringify(e.value).length) {
-                  resultObj = e.value;
-                } else {
-                  resultObj = o.serverResponse[type].result;
-                }
-                tempObj = { jsonrpc: this.jsonrpc, result: resultObj };
-              } else {
-                Object.entries(e.value).forEach(([k, v]) => {
-                  o.serverResponse[type][k] = { jsonrpc: this.jsonrpc, result: v };
-                });
-                tempObj = o.serverResponse[type];
-              }
-            } else {
-              if (e.value.messages) {
-                tempObj = { jsonrpc: this.jsonrpc, result: e.value };
-              } else {
-                tempObj = {};
-                Object.entries(e.value).forEach(([k, v]) => {
-                  tempObj[k] = { jsonrpc: this.jsonrpc, result: v };
-                });
-              }
-            }
-          } else if (type == "resources/list") {
-            if (o.serverResponse[type]) {
-              let resultObj;
-              if (JSON.stringify(o.serverResponse[type].result).length < JSON.stringify(e.value).length) {
-                resultObj = e.value;
-              } else {
-                resultObj = o.serverResponse[type].result;
-              }
-              tempObj = { jsonrpc: this.jsonrpc, result: resultObj };
-            } else {
-              tempObj = { jsonrpc: this.jsonrpc, result: e.value };
-            }
-          } else {
-            tempObj = { jsonrpc: this.jsonrpc, result: { [k]: [e.value] } };
-          }
-          o.serverResponse[type] = tempObj;
-        }
-        if (e.hasOwnProperty("function")) {
-          const kk = `${k}/call`;
-          if (o.functions[kk]) {
-            o.functions[kk][e.function.name] = e.function;
-          } else {
-            o.functions[kk] = { [e["function"]["name"]]: e.function };
-          }
-        }
-        return o;
-      }, { serverResponse: {}, functions: {} });
-      serverResponse = oo.serverResponse;
-      functions = oo.functions;
-    }
-
-    const obj = this.parseObj_(eventObject);
-    let retObj = null;
-    if (Array.isArray(obj)) {
-      retObj = obj.reduce((ar, o) => {
-        const r = this.batchProcess_({ obj: o, serverResponse, functions });
-        if (r) {
-          ar.push(r);
-        }
-        return ar;
-      }, []).filter(e => e);
-      if (retObj.length == 0) {
-        return null;
-      }
-    } else {
-      retObj = this.batchProcess_({ obj, serverResponse, functions });
-    }
-
-    if (retObj) {
-      const data = JSON.stringify(retObj);
-      if (Array.isArray(retObj)) {
-        this.values.push([this.date, "batch process", null, "server --> client", data]);
-      }
-      return ContentService.createTextOutput(data).setMimeType(ContentService.MimeType.JSON);
-    }
-    return null;
+   * ### Description
+   * Helper to evaluate and return the larger JSON object string, preventing overwrites of expanded data.
+   *
+   * @param {Object} currentObj
+   * @param {Object} newObj
+   * @return {Object}
+   * @private
+   */
+  updateResultIfLarger_(currentObj, newObj) {
+    if (!currentObj) return newObj;
+    return JSON.stringify(currentObj).length < JSON.stringify(newObj).length
+      ? newObj
+      : currentObj;
   }
 
+  /**
+   * ### Description
+   * Constructs the text output response for the MCP client.
+   *
+   * @param {Object} object
+   * @return {GoogleAppsScript.Content.TextOutput|null}
+   * @private
+   */
+  createResponse_(object) {
+    let {
+      eventObject,
+      serverResponse = null,
+      functions = {},
+      items = [],
+    } = object;
+
+    // Access Key Validation
+    const reqAccessKey = eventObject.parameter?.accessKey;
+    if (this.accessKey && reqAccessKey !== this.accessKey) {
+      const errMsg = "Invalid accessKey provided.";
+      this.values.push([this.date, null, null, "At server", errMsg]);
+      const retObj = {
+        error: { code: this.ErrorCode.InvalidRequest, message: errMsg },
+        jsonrpc: this.jsonrpc,
+      };
+      return ContentService.createTextOutput(
+        JSON.stringify(retObj),
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Dynamic Items Construction
+    if (
+      items.length > 0 &&
+      !serverResponse &&
+      Object.keys(functions).length === 0
+    ) {
+      const lockedTypes = [
+        "initialize",
+        "prompts/list",
+        "prompts/get",
+        "resources/list",
+      ];
+      const duplicateChecked = [];
+      const itemSet = new Set();
+
+      // Deduplicate items
+      items.forEach((e) => {
+        const type = e.type;
+        const name = e.value?.name;
+        if (!lockedTypes.includes(type) && name && itemSet.has(name)) {
+          console.warn(`Item "${name}" is duplicated and will be ignored.`);
+        } else {
+          if (name) itemSet.add(name);
+          duplicateChecked.push(e);
+        }
+      });
+
+      // Construct maps
+      const generated = duplicateChecked.reduce(
+        (acc, e) => {
+          const type = e.type;
+          const rootKey = type.split("/")[0];
+
+          if (!lockedTypes.includes(type) && acc.serverResponse[type]) {
+            acc.serverResponse[type].result[rootKey].push(e.value);
+          } else {
+            let tempObj = {};
+            if (type === "initialize" || type === "resources/list") {
+              const existingRes = acc.serverResponse[type]?.result;
+              tempObj = {
+                jsonrpc: this.jsonrpc,
+                result: this.updateResultIfLarger_(existingRes, e.value),
+              };
+            } else if (type === "prompts/list") {
+              let resultObj = acc.serverResponse[type]?.result || {
+                prompts: [],
+              };
+              if (e.value.prompts && Array.isArray(e.value.prompts)) {
+                resultObj.prompts.push(...e.value.prompts);
+                resultObj.prompts.sort((a, b) => (a.name > b.name ? 1 : -1));
+              }
+              tempObj = { jsonrpc: this.jsonrpc, result: resultObj };
+            } else if (type === "prompts/get") {
+              if (acc.serverResponse[type]) {
+                if (acc.serverResponse[type].result) {
+                  const existingRes = acc.serverResponse[type].result;
+                  tempObj = {
+                    jsonrpc: this.jsonrpc,
+                    result: this.updateResultIfLarger_(existingRes, e.value),
+                  };
+                } else {
+                  Object.entries(e.value).forEach(([k, v]) => {
+                    acc.serverResponse[type][k] = {
+                      jsonrpc: this.jsonrpc,
+                      result: v,
+                    };
+                  });
+                  tempObj = acc.serverResponse[type];
+                }
+              } else {
+                if (e.value.messages) {
+                  tempObj = { jsonrpc: this.jsonrpc, result: e.value };
+                } else {
+                  Object.entries(e.value).forEach(([k, v]) => {
+                    tempObj[k] = { jsonrpc: this.jsonrpc, result: v };
+                  });
+                }
+              }
+            } else {
+              tempObj = {
+                jsonrpc: this.jsonrpc,
+                result: { [rootKey]: [e.value] },
+              };
+            }
+            acc.serverResponse[type] = tempObj;
+          }
+
+          // Functions injection
+          if ("function" in e) {
+            const callKey = `${rootKey}/call`;
+            acc.functions[callKey] = acc.functions[callKey] || {};
+            acc.functions[callKey][e.function.name] = e.function;
+          }
+          return acc;
+        },
+        { serverResponse: {}, functions: {} },
+      );
+
+      serverResponse = generated.serverResponse;
+      functions = generated.functions;
+    }
+
+    // Evaluate parsed request bodies
+    const reqObj = this.parseObj_(eventObject);
+    let finalResponse = null;
+
+    if (Array.isArray(reqObj)) {
+      finalResponse = reqObj
+        .map((o) => this.batchProcess_({ obj: o, serverResponse, functions }))
+        .filter(Boolean);
+      if (finalResponse.length === 0) return null;
+    } else {
+      finalResponse = this.batchProcess_({
+        obj: reqObj,
+        serverResponse,
+        functions,
+      });
+    }
+
+    if (finalResponse) {
+      const dataStr = JSON.stringify(finalResponse);
+      if (Array.isArray(finalResponse)) {
+        this.values.push([
+          this.date,
+          "batch process",
+          null,
+          "server --> client",
+          dataStr,
+        ]);
+      }
+      return ContentService.createTextOutput(dataStr).setMimeType(
+        ContentService.MimeType.JSON,
+      );
+    }
+
+    return null;
+  }
 
   /*****************************************************************************************************
-  * For client
-  */
+   * CLIENT METHODS
+   *****************************************************************************************************/
 
   /**
-  * ### Description
-  * Method for preparing the MCP client.
-  *
-  * @param {Object} object Object using this script.
-  * @param {String} object.apiKey API key for using Gemini API.
-  * @param {String} object.prompt Prompt
-  * @param {Array} object.mcpServerUrls MCP server URLs.
-  * @param {Boolean} object.batchProcess The default is false. When this is true, the batch process is used from client to servers.
-  * @param {Object} object.functions This is custom function at the client side.
-  * @param {Array} object.history
-  * @param {Array} object.mcpServerObj MCP servers installed as the library.
-  * @return {MCPApp}
-  */
+   * ### Description
+   * Prepares the MCP client environment and internal configuration.
+   *
+   * @param {Object} object - Configuration parameters.
+   * @param {string} object.apiKey - API key for the Gemini API.
+   * @param {string} object.prompt - Input prompt targeting the agent.
+   * @param {string[]} [object.mcpServerUrls=[]] - Valid URLs of the targeted MCP servers.
+   * @param {boolean} [object.batchProcess=false] - If true, enables batch request processing towards the servers.
+   * @param {Object} [object.functions] - Custom client-side tools/functions.
+   * @param {Array}  [object.history] - Chat history array for continuous conversation.
+   * @param {Array}[object.mcpServerObj] - MCP Servers installed directly as libraries.
+   * @return {MCPApp}
+   */
   client(object = {}) {
     this.errorProcessForClient_(object);
-    if (!object.mcpServerUrls || !Array.isArray(object.mcpServerUrls) || object.mcpServerUrls.length == 0) {
+    if (!Array.isArray(object.mcpServerUrls)) {
       object.mcpServerUrls = [];
     }
 
-    this.clientInfo = { name: "MCApp_client", version: "1.0.0" };
+    this.clientInfo = { name: "MCPApp_client", version: "1.0.0" };
 
     /** @private */
-    this.model = "models/gemini-2.0-flash"; // and "models/gemini-2.5-flash-preview-04-17"
+    this.model = "models/gemini-3-flash-preview";
 
     /** @private */
     this.id = 0;
 
     /** @private */
-    this.headers = { authorization: "Bearer " + ScriptApp.getOAuthToken() };
+    this.headers = { authorization: `Bearer ${ScriptApp.getOAuthToken()}` };
 
     this.prepareClient_(object);
     return this;
   }
 
   /**
-  * ### Description
-  * Main method for the MCP client.
-  *
-  * @param {String} object.apiKey API key for using Gemini API.
-  * @param {String} object.prompt Prompt
-  * @param {Array} object.mcpServerUrls MCP server URLs.
-  * @param {Object} object Object using this script.
-  * @return {Object}
-  */
+   * ### Description
+   * Main execution sequence for communicating with the configured MCP servers and local logic.
+   * It analyzes the user prompt using the Gemini model to decide tool ordering and sequential execution.
+   *
+   * @return {Object} An object containing the final results array and generation history.
+   */
   callMCPServers() {
-    console.log(`--- start: Call MCP servers or functions (client --> server)`);
+    console.log("--- start: Call MCP servers or functions (client --> server)");
 
-    if (!this.functions) {
+    if (!this.functions?.params_) {
       this.functions = { params_: {} };
     }
 
-    let functionCallings = Object.entries(this.functions.params_).map(([k, v]) => (
-      `- Name: "${k}", Details: ${JSON.stringify(v)}`
-    ));
-    if (functionCallings.length == 0) {
-      functionCallings = ["No functions."];
+    let functionCallings = Object.entries(this.functions.params_).map(
+      ([key, val]) => `- Name: "${key}", Details: ${JSON.stringify(val)}`,
+    );
+    if (functionCallings.length === 0) {
+      functionCallings = ["No accessible functions currently available."];
     }
 
-    const mcpServerInfAr = this.mcpServerObj.reduce((ar, o) => {
-      if (o.initialize?.result?.serverInfo) {
-        const v = o.initialize.result.serverInfo;
-        ar.push(`Name: ${v.name}, Version: ${v.version}`);
-      }
-      return ar;
+    const serverInfoArr = (this.mcpServerObj || []).reduce((acc, obj) => {
+      const serverInfo = obj.initialize?.result?.serverInfo;
+      if (serverInfo)
+        acc.push(`Name: ${serverInfo.name}, Version: ${serverInfo.version}`);
+      return acc;
     }, []);
-    const mcpServerInf = [
-      `The name and version of the available MCP server are as follows.`,
-      ...mcpServerInfAr,
+
+    const mcpServerDescriptions = [
+      "The available connected MCP servers are listed below:",
+      ...serverInfoArr,
     ];
 
+    const currentTimestamp = Utilities.formatDate(
+      this.date,
+      this.timezone,
+      "yyyy-MM-dd HH:mm:ss",
+    );
+
     const systemInstructionText = [
-      "You are an expert delegator capable of assigning user requests to appropriate Model Context Protocol (MCP) servers. You create the suitable order for processing functions.",
+      "You are an expert autonomous delegator capable of assigning user requests to appropriate Model Context Protocol (MCP) server functions.",
+      "You construct the optimal logical order for processing tasks leveraging available functions.",
       "<Functions>",
-      "The following functions are the available functions list. The JSON schema of the value of 'Details' is the same as the schema for the function calling. From 'Details', understand the functions.",
+      "The functions available are listed below. The JSON schema defining 'Details' reflects standard function-calling schemas.",
       ...functionCallings,
       "</Functions>",
       "<Mission>",
-      "- Understand the functions and the tasks that the functions can do.",
-      "- Understand requests of the user's prompt.",
-      "- For actionable tasks that the functions can do, select a suitable one of the given functions for accurately resolving requests of the user's prompt in the suitable order. Always include the function name when responding to the user.",
-      "If multiple processes can be run with a single function, create a suitable prompt including those processes in it.",
-      "- If the suitable functions cannot be found, directly answer without using them.",
-      `- Use "without_function", if all other functions except for "without_function" can not resolve the tasks.`,
-      `- In the case that you are required to confirm whether the process is required to be stopped or continued between each process, use the function "check_process" just after each process.`,
+      "- Fully analyze the purpose and utility of the provided functions.",
+      "- Comprehend the nuanced requirements within the user's prompt.",
+      "- Assign tasks accurately to appropriate functions in sequential execution order.",
+      "- If multiple independent actions map to a single function, merge the logic within the prompt configuration for that function.",
+      "- If no combination of functions can fulfill the user's prompt, resolve using your intrinsic knowledge.",
+      `- Fall back to the "without_function" action if existing tools are unsuited for the assigned task.`,
+      `- If a task requires conditional halting verification between execution steps, inject the "check_process" function following that step.`,
       "</Mission>",
       "<Important>",
-      "- Do not fabricate responses.",
-      "- If you are unsure, ask the user for more details.",
-      "- Suggest the suitable order of the functions to resolve the user's prompt.",
-      "- When the requests include both the function that can be resolved and the function that cannot be resolved, suggest the order by including the functions.",
-      `- Don't include some code in the response value like "tool_code".`,
-      `- Don't suggest some code in the response value like "tool_code".`,
-      `- If you are required to know the current date time, it's "${Utilities.formatDate(this.date, this.timezone, "yyyy-MM-dd HH:mm:ss")}". And, timezone is ${this.timezone}.`,
+      "- Never fabricate responses. Output strictly factual resolutions based on functions or core knowledge.",
+      "- Ask the user for clarification if the request is irreconcilably vague.",
+      "- Do NOT output or suggest executable code (e.g., 'tool_code' blocks). Only provide the requested format.",
+      `- If you require the current datetime context, use: "${currentTimestamp}" operating within timezone ${this.timezone}.`,
       "</Important>",
     ].join("\n");
 
     const responseSchema = {
-      title: "Order of functions and functions for resolving the user's prompt.",
-      description: "Suggest the suitable order of the functions and the functions to resolve the user's prompt.",
+      title: "Function Execution Ordering Strategy",
+      description:
+        "Define the ordered list of functions needed to resolve the task.",
       type: "array",
       items: {
         type: "object",
         properties: {
-          name: { description: "Function name.", type: "string" },
-          task: { description: "For actionable tasks that the functions can do, select a suitable one of the given functions to accurately resolve requests of the user's prompt in the suitable order.", type: "string" },
+          name: {
+            description: "Exact name of the selected function.",
+            type: "string",
+          },
+          task: {
+            description:
+              "The specific sub-task or instruction allocated to this function.",
+            type: "string",
+          },
         },
       },
     };
-    const obj = {
+
+    const setupObj = {
       apiKey: this.clientObject.apiKey,
-      systemInstruction: { parts: [{ text: systemInstructionText }], role: "model" },
+      systemInstruction: {
+        parts: [{ text: systemInstructionText }],
+        role: "model",
+      },
       model: this.model,
       responseMimeType: "application/json",
       responseSchema,
     };
-    const g = new GeminiWithFiles(obj);
-    const textPrompt = [
-      "User's prompt is as follows.",
-      `<UserPrompt>${this.clientObject.prompt}</UserPrompt>`,
-    ].join("\n");
-    const orderAr = g.generateContent({ q: textPrompt });
 
-    const orders = orderAr.map((e, i) => `${i + 1}: ${e.name}`).join("\n");
-    console.log(`Task will be processed in the following order.\n${orders}`);
+    const geminiOrchestrator = new GeminiWithFiles(setupObj);
+    const orchestratorPrompt = `User's input prompt:\n<UserPrompt>${this.clientObject.prompt}</UserPrompt>`;
+    const executedOrders = geminiOrchestrator.generateContent({
+      q: orchestratorPrompt,
+    });
 
-    if (!Array.isArray(orderAr) || orderAr.length == 0) {
-      const err = "Internal server error";
-      const errObj = { "error": { "code": this.ErrorCode[err], "message": `${err}. Try again.` }, "jsonrpc": "2.0", id };
-      this.values.push([this.date, null, null, "Client side", JSON.stringify(errObj)]);
+    if (!Array.isArray(executedOrders) || executedOrders.length === 0) {
+      const errObj = {
+        error: {
+          code: this.ErrorCode.InternalError,
+          message:
+            "Internal planning error. The model returned no execution strategy.",
+        },
+        jsonrpc: this.jsonrpc,
+        id: this.id,
+      };
+      this.values.push([
+        this.date,
+        null,
+        null,
+        "Client side",
+        JSON.stringify(errObj),
+      ]);
       return errObj;
     }
 
-    console.log("--- start: Process result.");
-    let tempHistory = this.clientObject.history || [];
-    const systemInstructionText2 = [
-      "You are an expert delegator capable of assigning user requests to appropriate functions with function calling.",
+    const orderLog = executedOrders
+      .map((e, i) => `${i + 1}: [${e.name}] -> ${e.task}`)
+      .join("\n");
+    console.log(`Planned Execution Pipeline:\n${orderLog}`);
+    console.log("--- start: Sequence Execution.");
+
+    let conversationHistory = this.clientObject.history || [];
+    const executionSystemInstruction = [
+      "You are an expert executor responsible for evaluating individual function parameters using function calling.",
       "<Mission>",
-      "- Understand the functions and the tasks that the functions can do.",
-      "- Understand requests of the user's prompt.",
-      `- If the function is required to provide the arguments, create the suitable arguments using the prompt and the history, and provide them to the function.`,
-      `- Use "without_function", if all other functions except for "without_function" can not resolve the tasks.`,
-      `- When you use the function "check_process", check carefully the previous history and decide whether the process is required to be stopped or continued.`,
+      "- Evaluate the required function syntax and current objective.",
+      "- Construct appropriate function arguments extrapolating from task instructions and conversation history.",
+      `- Invoke "without_function" if the required tasks surpass defined tool capabilities.`,
+      `- If executing "check_process", thoroughly evaluate previous results to determine whether processing should halt or proceed.`,
       "</Mission>",
       "<Important>",
-      "- Do not fabricate responses.",
-      `- If you are required to know the current date time, it's "${Utilities.formatDate(this.date, this.timezone, "yyyy-MM-dd HH:mm:ss")}". And, timezone is ${this.timezone}.`,
-      "- Available MCP servers are as follows. If the information of the MCP servers is required, use this.",
+      "- Maintain strict adherence to factual outputs.",
+      `- The current operating datetime is "${currentTimestamp}" (Timezone: ${this.timezone}).`,
+      "- Readily utilize information from these available server pools:",
       "<MCPServers>",
-      ...mcpServerInf,
+      ...mcpServerDescriptions,
       "</MCPServers>",
       "</Important>",
     ].join("\n");
 
-    const ar = [];
-    for (let i in orderAr) {
-      const { name, task } = orderAr[i];
-      console.log(`--- Running the function "${name}" by task "${task}".`);
-      const funcCall = {
+    const generationResults = [];
+
+    for (const step of executedOrders) {
+      const { name, task } = step;
+      console.log(`--- Executing function: "${name}" | Objective: "${task}"`);
+
+      const funcCallWrapper = {
         params_: { [name]: this.functions.params_[name] },
-        [name]: this.functions[name]
+        [name]: this.functions[name],
       };
-      const obj = {
+
+      const executeObj = {
         apiKey: this.clientObject.apiKey,
         model: this.model,
-        functions: funcCall,
-        systemInstruction: { parts: [{ text: systemInstructionText2 }], role: "model" },
-        history: tempHistory,
+        functions: funcCallWrapper,
+        systemInstruction: {
+          parts: [{ text: executionSystemInstruction }],
+          role: "model",
+        },
+        history: conversationHistory,
         toolConfig: {
           functionCallingConfig: {
             mode: "any",
-            allowedFunctionNames: [name]
-          }
+            allowedFunctionNames: [name],
+          },
         },
       };
-      const gg = new GeminiWithFiles(obj);
 
-      // console.log(gg.history[gg.history.length - 1]?.parts[0]?.functionResponse.response.content || ""); // For debug.
-
-      const q = [
-        `Your task is as follows.`,
-        `<Task>${task}</Task>`,
-      ];
-      const res = gg.generateContent({ q: q.join("\n") });
+      const geminiExecutor = new GeminiWithFiles(executeObj);
+      const executionPrompt = `Current execution objective:\n<Task>${task}</Task>`;
+      const res = geminiExecutor.generateContent({ q: executionPrompt });
 
       if (res.functionResponse) {
         try {
-          if (typeof res.functionResponse == "string") {
+          if (typeof res.functionResponse === "string") {
             const funcResObj = JSON.parse(res.functionResponse);
             if (funcResObj?.result?.content) {
-              ar.push(...funcResObj.result.content);
-              gg.history[gg.history.length - 1].parts[0].functionResponse.response.content = funcResObj.result.content.filter(({ type }) => type == "text").map(({ text }) => text).join("\n");
+              generationResults.push(...funcResObj.result.content);
+              const consolidatedText = funcResObj.result.content
+                .filter((item) => item.type === "text")
+                .map((item) => item.text)
+                .join("\n");
+
+              // Direct internal state manipulation based on the external library behavior
+              const lastHistoryPart =
+                geminiExecutor.history[geminiExecutor.history.length - 1]
+                  ?.parts?.[0];
+              if (lastHistoryPart?.functionResponse?.response) {
+                lastHistoryPart.functionResponse.response.content =
+                  consolidatedText;
+              }
             }
           } else {
-            let msg = "";
-            if (res.functionResponse.task && res.functionResponse.result) {
-              if (name == "check_process") {
-                if (res.functionResponse.result.stopProcess) {
-                  msg = `Task: ${res.functionResponse.task}. The process was stopped. The reason for this is as follows. ${res.functionResponse.result.reason}`;
-                  ar.push(msg);
-                  break;
+            let compiledMessage = "";
+            const resData = res.functionResponse;
+
+            if (resData.task && resData.result) {
+              if (name === "check_process") {
+                if (resData.result.stopProcess) {
+                  compiledMessage = `Process Halted. Task: ${resData.task}. Reason: ${resData.result.reason}`;
+                  generationResults.push(compiledMessage);
+                  break; // Stop sequential pipeline
                 } else {
-                  msg = `Task: ${res.functionResponse.task}. Continue the process without errors.`;
+                  compiledMessage = `Task: ${resData.task}. Check passed, process continued.`;
                 }
               } else {
-                msg = `Task: ${res.functionResponse.task}, Result: ${res.functionResponse.result}`;
+                compiledMessage = `Task: ${resData.task}, Result: ${JSON.stringify(resData.result)}`;
               }
-            } else if (!res.functionResponse.task && res.functionResponse.result) {
-              msg = `Task: ${task}, Result: ${res.functionResponse.result}`;
+            } else if (!resData.task && resData.result) {
+              compiledMessage = `Task: ${task}, Result: ${JSON.stringify(resData.result)}`;
             } else {
-              msg = "No response was returned.";
+              compiledMessage =
+                "System warning: Empty response derived from tool execution.";
             }
-            ar.push(msg);
-            gg.history[gg.history.length - 1].parts[0].functionResponse.response.content = msg;
+
+            generationResults.push(compiledMessage);
+            const lastHistoryPart =
+              geminiExecutor.history[geminiExecutor.history.length - 1]
+                ?.parts?.[0];
+            if (lastHistoryPart?.functionResponse?.response) {
+              lastHistoryPart.functionResponse.response.content =
+                compiledMessage;
+            }
           }
-        } catch ({ stack }) {
-          console.warn(stack);
-          ar.push(res.functionResponse);
-          gg.history[gg.history.length - 1].parts[0].functionResponse.response.content = res.functionResponse;
+        } catch (error) {
+          console.warn(`Execution Response Parse Error: ${error.stack}`);
+          generationResults.push(res.functionResponse);
+          const lastHistoryPart =
+            geminiExecutor.history[geminiExecutor.history.length - 1]
+              ?.parts?.[0];
+          if (lastHistoryPart?.functionResponse?.response) {
+            lastHistoryPart.functionResponse.response.content =
+              res.functionResponse;
+          }
         }
       }
-      tempHistory = gg.history;
+      conversationHistory = geminiExecutor.history;
     }
 
-    let finalResults = ar.flatMap(o => {
-      const type = o.type;
-      if (type == "text") {
-        return o[type];
-      } else if (typeof o == "string") {
-        return o;
+    let finalOutputs = generationResults.flatMap((output) => {
+      if (output?.type === "text") return output.text;
+      if (typeof output === "string") return output;
+      if (output?.data) {
+        const fileBlob = Utilities.newBlob(
+          Utilities.base64Decode(output.data),
+          output.mimeType,
+          "downloaded_file",
+        );
+        return [
+          fileBlob,
+          `Attachment payload successfully loaded (MIME type: ${output.mimeType}).`,
+        ];
       }
-      if (o.data) {
-        const fileBlob = Utilities.newBlob(Utilities.base64Decode(o.data), o.mimeType, "sampleName");
-        return [fileBlob, `The data of mimeType "${o.mimeType}" could be downloaded.`];
-      }
-      return [`The type of file was returned. But, the file content was not included in the response.`];
+      return [
+        "System Warning: Received a file attachment signature, but content payload was missing.",
+      ];
     });
 
-    const strResults = finalResults.filter(e => typeof e == "string");
-    if (strResults.length > 0) {
-      const gg = new GeminiWithFiles({ apiKey: this.clientObject.apiKey, model: this.model, history: tempHistory });
-      const res3 = gg.generateContent({
-        parts: [
-          { text: `Summarize answers by considering the question.` },
-          { text: `<Question>${this.clientObject.prompt}</Question>` },
-          { text: `<Answers>${strResults.join("\n")}</Answers>` }
-        ]
+    const standardTextResults = finalOutputs.filter(
+      (e) => typeof e === "string",
+    );
+
+    // Final summarization phase if text results exist
+    if (standardTextResults.length > 0) {
+      const geminiSummarizer = new GeminiWithFiles({
+        apiKey: this.clientObject.apiKey,
+        model: this.model,
+        history: conversationHistory,
       });
-      g.history = gg.history;
-      finalResults = [res3, ...finalResults.filter(e => typeof e != "string")];
+      const finalSummary = geminiSummarizer.generateContent({
+        parts: [
+          {
+            text: "Synthesize the results strictly answering the user's initial prompt.",
+          },
+          { text: `<Question>${this.clientObject.prompt}</Question>` },
+          { text: `<Answers>\n${standardTextResults.join("\n")}\n</Answers>` },
+        ],
+      });
+      geminiOrchestrator.history = geminiSummarizer.history;
+      finalOutputs = [
+        finalSummary,
+        ...finalOutputs.filter((e) => typeof e !== "string"),
+      ];
     }
 
-    this.values.push([this.date, null, null, "Client side", JSON.stringify(finalResults)]);
+    this.values.push([
+      this.date,
+      null,
+      null,
+      "Client side",
+      JSON.stringify(finalOutputs),
+    ]);
+    console.log("--- end: Sequence Execution completed.");
 
-    console.log("--- end: Process result.");
-    return { result: finalResults, history: g.history };
-  }
-
-  /**
-  * ### Description
-  * Check parameters for client.
-  *
-  * @param {Object} object Object using this script.
-  * @return {void}
-  * @private
-  */
-  errorProcessForClient_(object) {
-    if (!object.apiKey) {
-      throw new Error("Please set your API key for using Gemini API.");
-    }
-    if (!object.prompt) {
-      throw new Error("Please set your prompt.");
-    }
-  }
-
-  /**
-  * ### Description
-  * Merge functions.
-  *
-  * @param {Object} func1
-  * @param {Object} func2
-  * @return {Object} Merged functions.
-  */
-  mergeFunctions_(func1, func2) {
-    func1.params_ = { ...func1.params_, ...func2.params_ };
-    const keys = Object.keys(func2.params_);
-    return { ...func1, ...Object.fromEntries(keys.map(k => [k, func2[k]])) };
+    return { result: finalOutputs, history: geminiOrchestrator.history };
   }
 
   /**
    * ### Description
-   * This is an object including the tools of MCP servers and the user's custom functions.
-   * You can see the specification of this object as follows.
-   * Ref: https://github.com/tanaikech/GeminiWithFiles?tab=readme-ov-file#use-function-calling
-   * 
-   * @return {Object}
+   * Validates core properties required for MCP Client execution.
+   *
+   * @param {Object} object
    * @private
    */
-  getClientFunctions_(functionsofMCPServers, addedFunctions) {
-    let funcs = {
+  errorProcessForClient_(object) {
+    if (!object.apiKey) {
+      throw new Error(
+        "Missing requirement: Gemini API Key configuration is necessary.",
+      );
+    }
+    if (!object.prompt) {
+      throw new Error(
+        "Missing requirement: An operational Prompt string must be provided.",
+      );
+    }
+  }
+
+  /**
+   * ### Description
+   * Utility to safely merge function parameter dictionaries without overwriting core states.
+   *
+   * @param {Object} funcDictA
+   * @param {Object} funcDictB
+   * @return {Object} Merged function object mapping.
+   * @private
+   */
+  mergeFunctions_(funcDictA, funcDictB) {
+    const mergedParams = { ...funcDictA.params_, ...funcDictB.params_ };
+    const extractFuncs = Object.keys(funcDictB.params_).reduce((acc, k) => {
+      acc[k] = funcDictB[k];
+      return acc;
+    }, {});
+
+    return { ...funcDictA, ...extractFuncs, params_: mergedParams };
+  }
+
+  /**
+   * ### Description
+   * Instantiates fundamental tools and orchestrates them alongside user-configured and server-provided tools.
+   *
+   * @param {Object} serverProvidedFuncs
+   * @param {Object} userCustomFuncs
+   * @return {Object} Unified toolkit.
+   * @private
+   */
+  getClientFunctions_(serverProvidedFuncs, userCustomFuncs) {
+    let baseToolkit = {
       params_: {
         without_function: {
-          description: `Use this if all other functions except for "without_function" can not resolve the tasks. At that time, think of a solution to the task using the knowledge you have.`,
+          description:
+            "Use this exclusively if existing functions cannot natively fulfill the request context. Solve the task dynamically.",
           parameters: {
             type: "object",
             properties: {
-              task: { type: "string", description: "Details of task." },
-              response: { type: "string", description: "Response to the task." },
+              task: {
+                type: "string",
+                description: "Detailed description of the task requirements.",
+              },
+              response: {
+                type: "string",
+                description: "Generated standard AI conversational response.",
+              },
             },
-            required: ["task", "response"]
-          }
+            required: ["task", "response"],
+          },
         },
-
         check_process: {
-          description: `When you use the function "check_process", check carefully the previous history and decide whether the process is required to be stopped or continued. Confirm the previous history. Use this to determine whether it is necessary to stop or continue the process.`,
+          description:
+            "Inspect conversational history logs and decide whether the orchestration must halt prematurely due to errors or achieved states.",
           parameters: {
             type: "object",
             properties: {
-              stopProcess: { type: "boolean", description: `When you use the function "check_process", check carefully the previous history and decide whether the process is required to be stopped or continued. Confirm the previous history. When it is required to stop the process, set this to true. When it is not required to stop the process, set this to false. It is required to return true or false.` },
-              task: { type: "string", description: "Details of task." },
-              reason: { type: "string", description: "Reason for stopping the process." },
+              stopProcess: {
+                type: "boolean",
+                description:
+                  "Return True to entirely halt processing, False to proceed to the next operation.",
+              },
+              task: {
+                type: "string",
+                description: "The task being evaluated.",
+              },
+              reason: {
+                type: "string",
+                description:
+                  "The descriptive cause backing the halt or continuation decision.",
+              },
             },
-            required: ["stopProcess", "task", "reason"]
-          }
-        }
+            required: ["stopProcess", "task", "reason"],
+          },
+        },
       },
-
       without_function: ({ task, response }) => {
-        console.log("--- without_function");
-        console.log(`--- Prompt: ${task}`);
+        console.log(
+          `--- Executing intrinsic handler: without_function | Prompt: ${task}`,
+        );
         return { task, result: response };
       },
-
       check_process: ({ stopProcess, task, reason }) => {
-        console.log("--- check_process");
-        console.log(`--- Prompt: ${task}`);
-        console.log(`--- stopProcess: ${stopProcess}`);
-        console.log(`--- reason: ${reason}`);
+        console.log(
+          `--- Check Process Triggered | Task: ${task} | Halting: ${stopProcess} | Reason: ${reason}`,
+        );
         return { task, result: { stopProcess, reason } };
-      }
+      },
     };
 
-    // Add functions from MCP server.
-    if (functionsofMCPServers && functionsofMCPServers.params_ && Object.keys(functionsofMCPServers).length > 1) {
-      funcs = this.mergeFunctions_(funcs, functionsofMCPServers);
+    if (
+      serverProvidedFuncs?.params_ &&
+      Object.keys(serverProvidedFuncs).length > 1
+    ) {
+      baseToolkit = this.mergeFunctions_(baseToolkit, serverProvidedFuncs);
     }
 
-    // Add user's custom functions.
-    if (addedFunctions && addedFunctions.params_ && Object.keys(addedFunctions).length > 1) {
-      funcs = this.mergeFunctions_(funcs, addedFunctions);
+    if (userCustomFuncs?.params_ && Object.keys(userCustomFuncs).length > 1) {
+      baseToolkit = this.mergeFunctions_(baseToolkit, userCustomFuncs);
     }
-    return funcs;
+
+    return baseToolkit;
   }
 
   /**
-  * ### Description
-  * Create a request.
-  *
-  * @return {Object}
-  */
-  createRequest_(object) {
-    const { u, obj } = object;
-    const { url, queryParameters } = this.parseQueryParameters_(u.trim());
-    const path = url.split("/").pop();
-    if (["exec", "dev"].includes(path)) { // <--- For Web Apps created by Google Apps Script
-      return { url: this.addQueryParameters_(url.trim(), queryParameters || {}), headers: this.headers, payload: obj, muteHttpExceptions: true };
+   * ### Description
+   * Constructs network requests properly routing standard URLs vs GAS Web Apps.
+   *
+   * @param {Object} object
+   * @return {Object} Valid configurations for UrlFetchApp.
+   * @private
+   */
+  createRequest_({ u, obj }) {
+    const rawUrl = u.trim();
+    const { url, queryParameters } = this.parseQueryParameters_(rawUrl);
+    const urlSegment = url.split("/").pop();
+    const fullUrl = this.addQueryParameters_(url.trim(), queryParameters || {});
+
+    const requestConfig = {
+      url: fullUrl,
+      payload: obj,
+      muteHttpExceptions: true,
+    };
+
+    // Authenticate if connecting to GAS-deployed executions
+    if (["exec", "dev"].includes(urlSegment)) {
+      requestConfig.headers = this.headers;
     }
-    return { url: this.addQueryParameters_(url.trim(), queryParameters || {}), payload: obj, muteHttpExceptions: true };
+
+    return requestConfig;
   }
 
   /**
-  * ### Description
-  * Create requests for gettting lists from MCP servers.
-  *
-  * @param {String} method
-  * @return {void}
-  */
+   * ### Description
+   * Dispatches targeted capability requests to all bound MCP Servers.
+   *
+   * @param {string} method - Request capability standard method (e.g., resources/list).
+   * @return {Object[]} List of crafted Request Objects.
+   * @private
+   */
   getRequest_(method) {
     this.id++;
-    const obj = { method, params: {}, jsonrpc: this.jsonrpc, id: this.id };
+    const payloadStr = JSON.stringify({
+      method,
+      params: {},
+      jsonrpc: this.jsonrpc,
+      id: this.id,
+    });
     return this.mcpServerObj.map(({ serverUrl }) =>
-      this.createRequest_({ u: serverUrl, obj: JSON.stringify(obj) })
+      this.createRequest_({ u: serverUrl, obj: payloadStr }),
     );
   }
 
   /**
-  * ### Description
-  * Get lists from MCP servers.
-  *
-  * @param {Object} object
-  * @return {void}
-  */
-  getLists_(object) {
-    const { method, requests } = object;
-    this.fetch_(requests).forEach((r, i) => {
-      const u = requests[i].url;
-      const idx = this.mcpServerObj.findIndex(e => e.serverUrl == u);
-      if (r.getResponseCode() == 200 && idx > -1) {
-        const text = r.getContentText();
-        let resObj = null;
+   * ### Description
+   * Executes network fetches to synchronize capability lists from bound MCP Servers.
+   *
+   * @param {Object} object
+   * @private
+   */
+  getLists_({ method, requests }) {
+    this.fetch_(requests).forEach((response, index) => {
+      const targetUrl = requests[index].url;
+      const matchingServerIndex = this.mcpServerObj.findIndex(
+        (srv) => srv.serverUrl === targetUrl,
+      );
+
+      if (response.getResponseCode() === 200 && matchingServerIndex > -1) {
         try {
-          resObj = JSON.parse(text);
-          resObj = resObj.result ? resObj : null;
-        } catch ({ stack }) {
-          // console.warn(stack); // If you want to check the error message, please use this.
+          const parsedRes = JSON.parse(response.getContentText());
+          if (parsedRes?.result) {
+            this.mcpServerObj[matchingServerIndex][method] = parsedRes.result;
+          }
+        } catch (error) {
+          // Silent catch to continue loop resilience
         }
-        if (resObj) this.mcpServerObj[idx][method] = resObj;
       }
     });
   }
 
   /**
-  * ### Description
-  * Parse response from MCP servers with the batch process.
-  *
-  * @param {Object} object
-  * @return {void}
-  */
-  parseBatchProcess_(object) {
-    const { mcpServerUrls, reqs } = object;
-    const rr = mcpServerUrls.reduce((o, e) => {
-      o[e] = { url: e, payload: [] };
-      reqs.forEach(({ requests }) => {
-        requests.forEach(({ url, payload }) => {
-          if (url == e) {
-            o[e].payload.push(JSON.parse(payload));
-          }
-        });
-      });
-      return o;
+   * ### Description
+   * Parses server arrays dynamically using batch processing for execution efficiency.
+   *
+   * @param {Object} object
+   * @private
+   */
+  parseBatchProcess_({ mcpServerUrls, reqs }) {
+    const payloadMap = mcpServerUrls.reduce((acc, url) => {
+      acc[url] = { url, payload: [] };
+      return acc;
     }, {});
-    const v = Object.values(rr);
-    const methodObj = v.map(({ payload }) => payload.reduce((o, { method, id }) => (o[id] = method, o), {}));
-    const requests = v.reduce((ar, { url, payload }) => {
-      if (payload.length > 0) {
-        ar.push(this.createRequest_({ u: url, obj: JSON.stringify(payload) }));
-      }
-      return ar;
-    }, []);
-    if (requests.length > 0) {
-      this.fetch_(requests).forEach((r, i) => {
-        const u = requests[i].url;
-        const idx = this.mcpServerObj.findIndex(e => e.serverUrl == u);
-        if (r.getResponseCode() == 200 && idx > -1) {
-          const text = r.getContentText();
+
+    reqs.forEach(({ requests }) => {
+      requests.forEach(({ url, payload }) => {
+        if (payloadMap[url]) {
+          payloadMap[url].payload.push(JSON.parse(payload));
+        }
+      });
+    });
+
+    const compiledArray = Object.values(payloadMap).filter(
+      (entry) => entry.payload.length > 0,
+    );
+    const methodIdMapArray = compiledArray.map((entry) =>
+      entry.payload.reduce((mapAcc, { method, id }) => {
+        mapAcc[id] = method;
+        return mapAcc;
+      }, {}),
+    );
+
+    const requestPool = compiledArray.map((entry) =>
+      this.createRequest_({ u: entry.url, obj: JSON.stringify(entry.payload) }),
+    );
+
+    if (requestPool.length > 0) {
+      this.fetch_(requestPool).forEach((response, i) => {
+        const targetUrl = requestPool[i].url;
+        const matchingServerIndex = this.mcpServerObj.findIndex(
+          (srv) => srv.serverUrl === targetUrl,
+        );
+
+        if (response.getResponseCode() === 200 && matchingServerIndex > -1) {
           try {
-            const resAr = JSON.parse(text);
-            resAr.forEach(resObj => {
-              if (resObj.result) {
-                this.mcpServerObj[idx][methodObj[i][resObj.id]] = resObj;
+            const parsedArray = JSON.parse(response.getContentText());
+            parsedArray.forEach((resChunk) => {
+              if (resChunk?.result) {
+                const triggerMethod = methodIdMapArray[i][resChunk.id];
+                this.mcpServerObj[matchingServerIndex][triggerMethod] =
+                  resChunk;
               }
             });
-
-          } catch ({ stack }) {
-            // console.warn(stack); // If you want to check the error message, please use this.
+          } catch (error) {
+            // Processing failure intentionally omitted for stability.
           }
         }
       });
@@ -878,286 +1145,414 @@ class MCPApp {
   }
 
   /**
-  * ### Description
-  * Create functions for GeminiWithFiles.
-  *
-  * @return {void}
-  */
+   * ### Description
+   * Converts MCP Server resources and tools into dynamically bound JavaScript functions executable by Gemini API.
+   * Ensures function contexts correctly align back to the server requests.
+   *
+   * @private
+   */
   createFunctions_() {
-    const methodConvObj = { "resources/list": "resources/read", "prompts/list": "prompts/get", "tools/list": "tools/call" };
-    // const methodConvObj = { "tools/list": "tools/call" }; // Use this, if you want to use only "tools/call".
-    const methodConvKeys = Object.keys(methodConvObj);
-    const getFunc_ = ({ payload, serverUrl }) => this.fetch_([this.createRequest_({ u: serverUrl, obj: JSON.stringify(payload) })])[0].getContentText();
-    const functionsofMCPServers = this.mcpServerObj.reduce((o, e) => {
-      const { serverUrl } = e;
-      methodConvKeys.forEach(k => {
-        const kk = k.split("/")[0];
-        const { result, id } = e[k] || {};
-        const oo = (result && result[kk]) ? result[kk] : [];
-        if (oo.length > 0) {
-          oo.forEach(fObj => {
-            const { name, description, uri, inputSchema } = fObj;
-            const fn = name.replace(/ /g, "_").trim();
-            let parameters = null;
-            let func = null;
-            if (kk == "resources") {
-              parameters = { title: name, description };
-              func = function () {
-                console.log(`--- function ${fn}`);
-                const payload = { method: methodConvObj[k], params: { uri }, jsonrpc: this.jsonrpc, id: id + 1 };
-                return getFunc_({ payload, serverUrl });
-              }
-            } else if (kk == "prompts") {
-              const argumentNames = fObj.arguments.map(p => p.name.replace(/ /g, "_").trim());
-              const properties = fObj.arguments.reduce((oa, p, i) => (oa[argumentNames[i]] = { type: "string", description: p.description }, oa), {});
-              parameters = { title: name, description, parameters: { type: "object", properties, required: Object.keys(properties) } };
-              func = function (obj) {
-                console.log(`--- function ${fn}`);
-                console.log(JSON.stringify(obj));
-                const payload = { method: methodConvObj[k], params: { name: fn, arguments: obj }, jsonrpc: this.jsonrpc, id: id + 1 };
-                return getFunc_({ payload, serverUrl });
-              }
-            } else if (kk == "tools") {
-              parameters = { title: name, description, parameters: inputSchema };
-              func = function (obj) {
-                console.log(`--- function ${fn}`);
-                console.log(JSON.stringify(obj));
-                const payload = { method: methodConvObj[k], params: { name: fn, arguments: obj }, jsonrpc: this.jsonrpc, id: id + 1 };
-                return getFunc_({ payload, serverUrl });
-              }
+    const routingMap = {
+      "resources/list": "resources/read",
+      "prompts/list": "prompts/get",
+      "tools/list": "tools/call",
+    };
+    const validEndpoints = Object.keys(routingMap);
+
+    const fetchWrapper = ({ payload, serverUrl }) => {
+      const responseArray = this.fetch_([
+        this.createRequest_({ u: serverUrl, obj: JSON.stringify(payload) }),
+      ]);
+      return responseArray[0].getContentText();
+    };
+
+    const aggregatedServerTools = this.mcpServerObj.reduce(
+      (accumulator, serverEntry) => {
+        const { serverUrl } = serverEntry;
+
+        validEndpoints.forEach((endpointKey) => {
+          const subKey = endpointKey.split("/")[0];
+          const resourceResult =
+            serverEntry[endpointKey]?.result ?? serverEntry[endpointKey];
+          const toolArray = resourceResult?.[subKey] ?? [];
+
+          toolArray.forEach((definition) => {
+            const { name, description, uri, inputSchema } = definition;
+            const cleanName = name.replaceAll(" ", "_").trim();
+            let toolMetadata = null;
+            let executionCallback = null;
+
+            if (subKey === "resources") {
+              toolMetadata = { title: name, description };
+              // Note: Arrow functions inherently bind `this` to the class, resolving jsonrpc context issues.
+              executionCallback = () => {
+                console.log(`--- Fetching Resource Execution: ${cleanName}`);
+                const dispatchPayload = {
+                  method: routingMap[endpointKey],
+                  params: { uri },
+                  jsonrpc: this.jsonrpc,
+                  id: this.id++,
+                };
+                return fetchWrapper({ payload: dispatchPayload, serverUrl });
+              };
+            } else if (subKey === "prompts") {
+              const propMap = definition.arguments.reduce((mapAcc, argObj) => {
+                mapAcc[argObj.name.replaceAll(" ", "_").trim()] = {
+                  type: "string",
+                  description: argObj.description,
+                };
+                return mapAcc;
+              }, {});
+
+              toolMetadata = {
+                title: name,
+                description,
+                parameters: {
+                  type: "object",
+                  properties: propMap,
+                  required: Object.keys(propMap),
+                },
+              };
+              executionCallback = (params) => {
+                console.log(`--- Generating Prompt Logic: ${cleanName}`);
+                const dispatchPayload = {
+                  method: routingMap[endpointKey],
+                  params: { name: cleanName, arguments: params },
+                  jsonrpc: this.jsonrpc,
+                  id: this.id++,
+                };
+                return fetchWrapper({ payload: dispatchPayload, serverUrl });
+              };
+            } else if (subKey === "tools") {
+              toolMetadata = {
+                title: name,
+                description,
+                parameters: inputSchema,
+              };
+              executionCallback = (params) => {
+                console.log(`--- Activating Tool Service: ${cleanName}`);
+                const dispatchPayload = {
+                  method: routingMap[endpointKey],
+                  params: { name: cleanName, arguments: params },
+                  jsonrpc: this.jsonrpc,
+                  id: this.id++,
+                };
+                return fetchWrapper({ payload: dispatchPayload, serverUrl });
+              };
             }
-            if (parameters && func) {
-              o.params_[fn] = { title: name, description, ...parameters };
-              o[fn] = func;
+
+            if (toolMetadata && executionCallback) {
+              accumulator.params_[cleanName] = {
+                title: name,
+                description,
+                ...toolMetadata,
+              };
+              accumulator[cleanName] = executionCallback;
             }
           });
-        }
-      });
-      return o;
-    }, { params_: {} });
+        });
+        return accumulator;
+      },
+      { params_: {} },
+    );
 
-
-    let addedFunctions = null;
-    if (this.clientObject.functions && this.clientObject.functions.params_ && Object.keys(this.clientObject.functions).length > 1) {
-      addedFunctions = { ...this.clientObject.functions };
+    let finalUserTools = null;
+    if (
+      this.clientObject.functions?.params_ &&
+      Object.keys(this.clientObject.functions).length > 1
+    ) {
+      finalUserTools = { ...this.clientObject.functions };
     }
-    const createdFunctions = this.getClientFunctions_(functionsofMCPServers, addedFunctions);
 
-    if (createdFunctions.params_) {
-      console.log(`In this run, ${Object.keys(createdFunctions.params_).length} functions are used.`);
+    const integratedToolkit = this.getClientFunctions_(
+      aggregatedServerTools,
+      finalUserTools,
+    );
+
+    if (integratedToolkit.params_) {
+      console.log(
+        `Capabilities mapped: ${Object.keys(integratedToolkit.params_).length} distinct operations loaded.`,
+      );
     }
 
     /** @private */
-    this.functions = createdFunctions;
+    this.functions = integratedToolkit;
   }
 
   /**
-  * ### Description
-  * Method for preparing the MCP client.
-  *
-  * @param {Object} object Object using this script.
-  * @return {MCPApp}
-  */
+   * ### Description
+   * Initiates the protocol handshakes for server discovery, caching supported models, tools, and capabilities.
+   *
+   * @param {Object} object
+   * @return {MCPApp}
+   * @private
+   */
   prepareClient_(object) {
     this.clientObject = object;
-    const { mcpServerUrls, batchProcess = false, mcpServerObj } = this.clientObject;
+    const {
+      mcpServerUrls,
+      batchProcess = false,
+      mcpServerObj,
+    } = this.clientObject;
 
-    if (mcpServerObj && Array.isArray(mcpServerObj) && mcpServerObj.length > 0) {
-      const mcpServerFunctions = mcpServerObj.flat().reduce((o, e) => {
-        if (e.type == "tools/list") {
-          const k = e.value.name;
-          o[k] = e["function"];
-          o.params_[k] = {
-            name: k,
-            description: e.value.description,
-            parameters: e.value.inputSchema,
+    // Load pre-installed Server Object library boundaries
+    if (Array.isArray(mcpServerObj) && mcpServerObj.length > 0) {
+      const flatLibTools = mcpServerObj.flat().reduce(
+        (acc, entry) => {
+          if (entry.type === "tools/list") {
+            const schemaKey = entry.value.name;
+            acc[schemaKey] = entry.function;
+            acc.params_[schemaKey] = {
+              name: schemaKey,
+              description: entry.value.description,
+              parameters: entry.value.inputSchema,
+            };
           }
-        }
-        return o;
-      }, { params_: {} });
-      if (this.clientObject.functions && this.clientObject.functions.params_ && Object.keys(this.clientObject.functions) > 1) {
-        this.clientObject.functions = this.mergeFunctions_(this.clientObject.functions, mcpServerFunctions);
+          return acc;
+        },
+        { params_: {} },
+      );
+
+      if (
+        this.clientObject.functions?.params_ &&
+        Object.keys(this.clientObject.functions).length > 1
+      ) {
+        this.clientObject.functions = this.mergeFunctions_(
+          this.clientObject.functions,
+          flatLibTools,
+        );
       } else {
-        this.clientObject.functions = mcpServerFunctions;
+        this.clientObject.functions = flatLibTools;
       }
     }
 
-    if (mcpServerUrls && Array.isArray(mcpServerUrls) && mcpServerUrls.length > 0) {
-      // initialize
-      const method1 = "initialize";
-      console.log(`--- start: ${method1} (client --> server)`);
-      const initializeObj = {
-        method: method1,
+    if (Array.isArray(mcpServerUrls) && mcpServerUrls.length > 0) {
+      // Execute Protocol Initializations
+      const methodInit = "initialize";
+      console.log(`--- Executing Handshake: ${methodInit} (Client --> Server)`);
+
+      const payloadInit = {
+        method: methodInit,
         params: {
           protocolVersion: this.protocolVersion,
           capabilities: {},
-          clientInfo: this.clientInfo
+          clientInfo: this.clientInfo,
         },
         jsonrpc: this.jsonrpc,
-        id: this.id
+        id: ++this.id,
       };
-      const initializeRequests = mcpServerUrls.map(u => this.createRequest_({ u, obj: JSON.stringify(initializeObj) }));
-      this.mcpServerObj = this.fetch_(initializeRequests).reduce((ar, r, i) => {
-        if (r.getResponseCode() == 200) {
-          const text = r.getContentText();
-          this.values.push([this.date, method1, this.id, "server --> client", text]);
-          try {
-            const obj = JSON.parse(text);
-            ar.push({ serverUrl: mcpServerUrls[i].trim(), [method1]: obj });
-          } catch ({ stack }) {
-            console.warn(stack);
-            ar.push({ serverUrl: mcpServerUrls[i].trim(), [method1]: null });
-          }
-        }
-        return ar;
-      }, []);
 
-      // notifications/initialized, notifications/cancelled
-      const method2 = "notifications/initialized";
-      const method3 = "notifications/cancelled";
-      console.log(`--- start: ${method2}, ${method3} (client --> server)`);
-      const notificationsInitializedObj = { method: method2, jsonrpc: this.jsonrpc };
-      const notificationsCancelledObj = { method: method3, params: { requestId: this.id, reason: `Error: MCP error. InternalError: ${this.ErrorCode.InternalError}`, jsonrpc: this.jsonrpc } };
-      const { notificationsInitializedRequests, notificationsCancelledRequests } = this.mcpServerObj.reduce((o, e) => {
-        const { serverUrl } = e;
-        if (e[method1]) {
-          o.notificationsInitializedRequests.push(this.createRequest_({ u: serverUrl, obj: JSON.stringify(notificationsInitializedObj) }));
-        } else {
-          o.notificationsCancelledRequests.push(this.createRequest_({ u: serverUrl, obj: JSON.stringify(notificationsCancelledObj) }));
-        }
-        return o;
-      }, { notificationsInitializedRequests: [], notificationsCancelledRequests: [] });
-      if (notificationsInitializedRequests.length == 0) {
-        this.values.push([this.date, method2, this.id, "At client", "Couldn't initialize MCPs."]);
+      const requestsInit = mcpServerUrls.map((url) =>
+        this.createRequest_({ u: url, obj: JSON.stringify(payloadInit) }),
+      );
+
+      this.mcpServerObj = this.fetch_(requestsInit).reduce(
+        (acc, response, idx) => {
+          if (response.getResponseCode() === 200) {
+            const bodyText = response.getContentText();
+            this.values.push([
+              this.date,
+              methodInit,
+              this.id,
+              "server --> client",
+              bodyText,
+            ]);
+            try {
+              acc.push({
+                serverUrl: mcpServerUrls[idx].trim(),
+                [methodInit]: JSON.parse(bodyText),
+              });
+            } catch (e) {
+              console.warn(
+                `Critical Format Error. Payload from "${mcpServerUrls[idx]}" is not standard MCP JSON. Snippet: ${bodyText.substring(0, 50)}...`,
+              );
+              acc.push({
+                serverUrl: mcpServerUrls[idx].trim(),
+                [methodInit]: null,
+              });
+            }
+          }
+          return acc;
+        },
+        [],
+      );
+
+      // Commit Connection Registrations
+      const methodNotifyInit = "notifications/initialized";
+      const methodNotifyCancel = "notifications/cancelled";
+      console.log(
+        `--- Confirming Connections: ${methodNotifyInit} / ${methodNotifyCancel}`,
+      );
+
+      const payloadNotifyInit = {
+        method: methodNotifyInit,
+        jsonrpc: this.jsonrpc,
+      };
+      const payloadNotifyCancel = {
+        method: methodNotifyCancel,
+        params: {
+          requestId: this.id,
+          reason: `Halted: Integration failure. InternalError code ${this.ErrorCode.InternalError}`,
+          jsonrpc: this.jsonrpc,
+        },
+      };
+
+      const categorizedReqs = this.mcpServerObj.reduce(
+        (acc, serverObj) => {
+          const payloadStr = JSON.stringify(
+            serverObj[methodInit] ? payloadNotifyInit : payloadNotifyCancel,
+          );
+          const configTarget = serverObj[methodInit]
+            ? acc.notifiedReqs
+            : acc.canceledReqs;
+          configTarget.push(
+            this.createRequest_({ u: serverObj.serverUrl, obj: payloadStr }),
+          );
+          return acc;
+        },
+        { notifiedReqs: [], canceledReqs: [] },
+      );
+
+      if (categorizedReqs.notifiedReqs.length === 0) {
+        this.values.push([
+          this.date,
+          methodNotifyInit,
+          this.id,
+          "At client",
+          "Fatal: No servers responded to initialized capability.",
+        ]);
         return this;
       }
-      if (notificationsCancelledRequests.length > 0) {
-        const res = this.fetch_(notificationsCancelledRequests).map(r => r.getContentText());
-        console.log(res);
-      }
-      this.fetch_(notificationsInitializedRequests);
-      // If you want to confirm the response from MCP server for "notifications/initialized", please use the following script.
-      // const resForNotificationsInitialized = this.fetch_(notificationsInitializedRequests);
-      // resForNotificationsInitialized.forEach((r, i) => {
-      //   const u = notificationsInitializedRequests[i].url;
-      //   const idx = this.mcpServerObj.findIndex(e => e.serverUrl == u);
-      //   if (r.getResponseCode() == 200 && idx > -1) {
-      //     console.log(r.getContentText()); // or this.mcpServerObj[idx][method2] = r.getContentText();
-      //   }
-      // });
 
-      const methodsForListing = ["resources/list", "prompts/list", "tools/list"];
-      const reqs = methodsForListing.map(m => ({ method: m, requests: this.getRequest_(m) }));
+      if (categorizedReqs.canceledReqs.length > 0) {
+        const cancelledLogs = this.fetch_(categorizedReqs.canceledReqs).map(
+          (res) => res.getContentText(),
+        );
+        console.log(`Connection Removals Triggered:`, cancelledLogs);
+      }
+
+      this.fetch_(categorizedReqs.notifiedReqs);
+
+      // Mapping Server Tool Capabilities
+      const resourceMethods = ["resources/list", "prompts/list", "tools/list"];
+      const capabilityJobs = resourceMethods.map((m) => ({
+        method: m,
+        requests: this.getRequest_(m),
+      }));
+
       if (batchProcess) {
-        console.log(`--- start: Get lists from servers with a batch process. (client --> server)`);
-        this.parseBatchProcess_({ mcpServerUrls, reqs });
+        console.log("--- Extracting Tool Lists (Batch Transmission Protocol)");
+        this.parseBatchProcess_({ mcpServerUrls, reqs: capabilityJobs });
       } else {
-        console.log(`--- start: Get lists from servers without a batch process. (client --> server)`);
-        reqs.forEach(rq => this.getLists_(rq));
+        console.log("--- Extracting Tool Lists (Linear Transmission Protocol)");
+        capabilityJobs.forEach((job) => this.getLists_(job));
       }
-      this.createFunctions_();
 
+      this.createFunctions_();
     } else {
-      console.log(`--- No MCP URLs.`);
-      this.values.push([this.date, null, null, "At client", "No MCP URLs."]);
-      let addedFunctions = null;
-      if (this.clientObject.functions && this.clientObject.functions.params_ && Object.keys(this.clientObject.functions).length > 1) {
-        addedFunctions = { ...this.clientObject.functions };
+      console.log("--- Status Warning: No remote MCP Server URLs assigned.");
+      this.values.push([
+        this.date,
+        null,
+        null,
+        "At client",
+        "No MCP Server URLs provided.",
+      ]);
+
+      let manualFunctions = null;
+      if (
+        this.clientObject.functions?.params_ &&
+        Object.keys(this.clientObject.functions).length > 1
+      ) {
+        manualFunctions = { ...this.clientObject.functions };
       }
-      const createdFunctions = this.getClientFunctions_(null, addedFunctions);
-      if (createdFunctions.params_) {
-        console.log(`In this run, ${Object.keys(createdFunctions.params_).length} functions are used.`);
+
+      const localToolkit = this.getClientFunctions_(null, manualFunctions);
+      if (localToolkit.params_) {
+        console.log(
+          `Locally executing capabilities. Distinct operations mapped: ${Object.keys(localToolkit.params_).length}`,
+        );
       }
 
       /** @private */
-      this.functions = createdFunctions;
-
+      this.functions = localToolkit;
     }
 
     return this;
   }
 
-
-
   /*****************************************************************************************************
-  * Tools
-  */
+   * TOOLS & UTILITIES
+   *****************************************************************************************************/
 
   /**
-  * ### Description
-  * Return the created functions.
-  *
-  * @return {Object}
-  */
+   * ### Description
+   * Exposes configured and dynamically imported tools configured in the agent network.
+   *
+   * @return {Object} Dictionary mappings containing tool executors.
+   */
   get getFunctions() {
     return this.functions;
   }
 
   /**
-  * ### Description
-  * Fetch
-  *
-  * @param {Array} requests
-  * @return {UrlFetchApp.HTTPResponse[]}
-  * @private
-  */
-  fetch_(requests) {
-    const res = UrlFetchApp.fetchAll(requests);
-    return res;
-  }
-
-  /**
-  * ### Description
-  * Parse object of the request body from doPost.
-  *
-  * @param {Object} e Object
-  * @return {Object} object
-  * @private
-  */
-  parseObj_(e) {
-    let obj;
-    if (e.postData.contents) {
-      obj = JSON.parse(e.postData.contents);
-    } else {
-
-      // If the data from the MCP client is requested as the GET method, this part will be used.
-
-    }
-    return obj;
-  }
-
-  /**
-   * Ref: https://github.com/tanaikech/UtlApp?tab=readme-ov-file#parsequeryparameters
-   * 
    * ### Description
-   * This method is used for parsing the URL including the query parameters.
-   * Ref: https://tanaikech.github.io/2018/07/12/adding-query-parameters-to-url-using-google-apps-script/
+   * Bulk execution framework wrapping GAS UrlFetchApp mechanism.
    *
-   * @param {String} url The URL including the query parameters.
-   * @return {Object} JSON object including the base url and the query parameters.
+   * @param {Object[]} requests - UrlFetchApp payload configuration objects.
+   * @return {GoogleAppsScript.URL_Fetch.HTTPResponse[]}
+   * @private
+   */
+  fetch_(requests) {
+    return UrlFetchApp.fetchAll(requests);
+  }
+
+  /**
+   * ### Description
+   * Extrapolates request mapping content correctly, accounting for raw text parsing.
+   *
+   * @param {Object} e - DoPost Google Event payload.
+   * @return {Object|null}
+   * @private
+   */
+  parseObj_(e) {
+    if (e?.postData?.contents) {
+      return JSON.parse(e.postData.contents);
+    }
+    // Implement parameter parsing map if GET protocol structures become permitted.
+    return null;
+  }
+
+  /**
+   * ### Description
+   * Analyzes an endpoint path returning distinct query object separations.
+   *
+   * @param {string} url - Valid string path.
+   * @return {Object|null}
    * @private
    */
   parseQueryParameters_(url) {
-    if (url === null || typeof url != "string") {
-      throw new Error("Please give URL (String) including the query parameters.");
+    if (typeof url !== "string") {
+      throw new Error(
+        "Invalid format. Provided URL definition must be a string format.",
+      );
     }
-    const s = url.split("?");
-    if (s.length == 1) {
-      return { url: s[0], queryParameters: null };
-    }
-    const [baseUrl, query] = s;
+
+    const parts = url.split("?");
+    if (parts.length === 1) return { url: parts[0], queryParameters: null };
+
+    const [baseUrl, query] = parts;
     if (query) {
-      const queryParameters = query.split("&").reduce(function (o, e) {
-        const temp = e.split("=");
-        const key = temp[0].trim();
-        let value = temp[1].trim();
-        value = isNaN(value) ? value : Number(value);
-        if (o[key]) {
-          o[key].push(value);
-        } else {
-          o[key] = [value];
-        }
-        return o;
+      const queryParameters = query.split("&").reduce((acc, paramBlock) => {
+        const [keyRaw, valRaw] = paramBlock.split("=");
+        const key = keyRaw.trim();
+        const valueStr = valRaw.trim();
+        const valueDecoded = isNaN(valueStr) ? valueStr : Number(valueStr);
+
+        if (acc[key]) acc[key].push(valueDecoded);
+        else acc[key] = [valueDecoded];
+
+        return acc;
       }, {});
       return { url: baseUrl, queryParameters };
     }
@@ -1165,44 +1560,58 @@ class MCPApp {
   }
 
   /**
-   * Ref: https://github.com/tanaikech/UtlApp?tab=readme-ov-file#addqueryparameters
-   * 
    * ### Description
-   * This method is used for adding the query parameters to the URL.
-   * Ref: https://tanaikech.github.io/2018/07/12/adding-query-parameters-to-url-using-google-apps-script/
+   * Applies parameterized attributes sequentially building valid REST URLs.
    *
-   * @param {String} url The base URL for adding the query parameters.
-   * @param {Object} obj JSON object including query parameters.
-   * @return {String} URL including the query parameters.
+   * @param {string} url - Unformatted base endpoint.
+   * @param {Object} obj - Parameters tree schema.
+   * @return {string}
    * @private
    */
   addQueryParameters_(url, obj) {
-    if (url === null || obj === null || typeof url != "string") {
+    if (typeof url !== "string" || !obj) {
       throw new Error(
-        "Please give URL (String) and query parameter (JSON object)."
+        "Validation mismatch. Valid string URL and object config must be supplied.",
       );
     }
-    const o = Object.entries(obj);
-    return (
-      (url == "" ? "" : `${url}${o.length > 0 ? "?" : ""}`) +
-      o.flatMap(([k, v]) =>
-        Array.isArray(v)
-          ? v.map((e) => `${k}=${encodeURIComponent(e)}`)
-          : `${k}=${encodeURIComponent(v)}`
+    const params = Object.entries(obj);
+    if (params.length === 0) return url;
+
+    const queryString = params
+      .flatMap(([key, value]) =>
+        Array.isArray(value)
+          ? value.map(
+              (entry) =>
+                `${encodeURIComponent(key)}=${encodeURIComponent(entry)}`,
+            )
+          : `${encodeURIComponent(key)}=${encodeURIComponent(value)}`,
       )
-        .join("&")
-    );
+      .join("&");
+
+    return `${url}${url.includes("?") ? "&" : "?"}${queryString}`;
   }
 
   /**
-  * ### Description
-  * Store logs to Google Sheets.
-  *
-  * @return {void}
-  * @private
-  */
+   * ### Description
+   * Transmits generated diagnostic arrays effectively truncating data to enforce GAS row integrity limits (Max 50k chars).
+   *
+   * @return {void}
+   * @private
+   */
   log_() {
-    this.values = this.values.map(r => r.map(c => typeof c == "string" ? c.substring(0, 40000) : c));
-    this.sheet.getRange(this.sheet.getLastRow() + 1, 1, this.values.length, this.values[0].length).setValues(this.values);
+    if (!this.sheet || this.values.length === 0) return;
+    const sanitizedData = this.values.map((row) =>
+      row.map((cell) =>
+        typeof cell === "string" ? cell.substring(0, 40000) : cell,
+      ),
+    );
+    this.sheet
+      .getRange(
+        this.sheet.getLastRow() + 1,
+        1,
+        sanitizedData.length,
+        sanitizedData[0].length,
+      )
+      .setValues(sanitizedData);
   }
 }
