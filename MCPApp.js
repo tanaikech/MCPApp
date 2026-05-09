@@ -1,8 +1,9 @@
 /**
  * Class object for MCP (Model Context Protocol).
  * Author: Kanshi Tanaike
- * Version: 2.0.10
- * Date: 2026-05-09 15:22
+ * Refactored by: Senior Generative AI & MCP Expert
+ * Version: 2.0.11
+ * Date: 2026-05-09 15:48
  * @class
  */
 class MCPApp {
@@ -10,7 +11,7 @@ class MCPApp {
    * @param {Object} object - Object used to initialize this script.
    * @param {string} [object.accessKey=null] - Default is null. Used for accessing the Web Apps.
    * @param {boolean} [object.log=false] - Default is false. When true, the log between the MCP client and server is stored in Google Sheets.
-   * @param {string} [object.spreadsheetId] - Spreadsheet ID. Logs are stored in the "log" sheet of this spreadsheet.
+   * @param {string}[object.spreadsheetId] - Spreadsheet ID. Logs are stored in the "log" sheet of this spreadsheet.
    * @param {boolean} [object.lock=true] - Default is true. By default, the script runs with LockService to prevent concurrency issues.
    * @return {MCPApp}
    */
@@ -80,7 +81,7 @@ class MCPApp {
    * Set these services if utilizing MCPApp as a library.
    *
    * @param {Object} services - Object containing the services you want to use.
-   * @param {GoogleAppsScript.Lock.Lock}[services.lock] - Instance of LockService (e.g., getScriptLock()).
+   * @param {GoogleAppsScript.Lock.Lock} [services.lock] - Instance of LockService (e.g., getScriptLock()).
    * @param {GoogleAppsScript.Properties.Properties} [services.properties] - Instance of PropertiesService.
    * @return {MCPApp}
    */
@@ -556,9 +557,9 @@ class MCPApp {
    * @param {string} object.apiKey - API key for the Gemini API.
    * @param {string} object.prompt - Input prompt targeting the agent.
    * @param {string[]} [object.mcpServerUrls=[]] - Valid URLs of the targeted MCP servers.
-   * @param {boolean} [object.batchProcess=false] - If true, enables batch request processing towards the servers.
-   * @param {Object} [object.functions] - Custom client-side tools/functions.
-   * @param {Array}  [object.history] - Chat history array for continuous conversation.
+   * @param {boolean}[object.batchProcess=false] - If true, enables batch request processing towards the servers.
+   * @param {Object}[object.functions] - Custom client-side tools/functions.
+   * @param {Array}[object.history] - Chat history array for continuous conversation.
    * @param {Array}[object.mcpServerObj] - MCP Servers installed directly as libraries.
    * @return {MCPApp}
    */
@@ -635,13 +636,14 @@ class MCPApp {
       "- Assign tasks accurately to appropriate functions in sequential execution order.",
       "- If multiple independent actions map to a single function, merge the logic within the prompt configuration for that function.",
       "- If no combination of functions can fulfill the user's prompt, resolve using your intrinsic knowledge.",
-      `- Fall back to the "without_function" action if existing tools are unsuited for the assigned task.`,
+      `- Fall back to the "without_function" action exclusively to provide the final conversational response.`,
       `- If a task requires conditional halting verification between execution steps, inject the "check_process" function following that step.`,
       "</Mission>",
       "<Important>",
       "- Never fabricate responses. Output strictly factual resolutions based on functions or core knowledge.",
       "- Ask the user for clarification if the request is irreconcilably vague.",
       "- Do NOT output or suggest executable code (e.g., 'tool_code' blocks). Only provide the requested format.",
+      `- Ensure all allocated tasks are terminal. Do not instruct the model to verify task completion or delivery status.`,
       `- If you require the current datetime context, use: "${currentTimestamp}" operating within timezone ${this.timezone}.`,
       "</Important>",
     ].join("\n");
@@ -716,7 +718,8 @@ class MCPApp {
       "<Mission>",
       "- Evaluate the required function syntax and current objective.",
       "- Construct appropriate function arguments extrapolating from task instructions and conversation history.",
-      `- Invoke "without_function" if the required tasks surpass defined tool capabilities.`,
+      `- Invoke "without_function" exclusively to output the final answer to the user.`,
+      `- Once you have generated the final response using "without_function", finish the process immediately without confirming completion.`,
       `- If executing "check_process", thoroughly evaluate previous results to determine whether processing should halt or proceed.`,
       "</Mission>",
       "<Important>",
@@ -761,7 +764,7 @@ class MCPApp {
       const executionPrompt = `Current execution objective:\n<Task>${task}</Task>`;
       const res = geminiExecutor.generateContent({ q: executionPrompt });
 
-      if (res.functionResponse) {
+      if (res && res.functionResponse) {
         try {
           if (typeof res.functionResponse === "string") {
             const funcResObj = JSON.parse(res.functionResponse);
@@ -772,7 +775,6 @@ class MCPApp {
                 .map((item) => item.text)
                 .join("\n");
 
-              // Direct internal state manipulation based on the external library behavior
               const lastHistoryPart =
                 geminiExecutor.history[geminiExecutor.history.length - 1]
                   ?.parts?.[0];
@@ -824,6 +826,25 @@ class MCPApp {
               res.functionResponse;
           }
         }
+      } else if (res) {
+        // Fallback catch: Model abandoned function calling, exhausted limits, or returned a raw text structure.
+        console.warn(
+          `Execution Warning: Missing functionResponse. Model returned standard text or was aborted.`,
+        );
+        const fallbackText =
+          typeof res === "string" ? res : res.text || JSON.stringify(res);
+        generationResults.push(fallbackText);
+
+        // Attempt to clean up the history if it reflects the aborted structure
+        const lastHistoryPart =
+          geminiExecutor.history[geminiExecutor.history.length - 1]?.parts?.[0];
+        if (lastHistoryPart && !lastHistoryPart.functionResponse) {
+          lastHistoryPart.text = fallbackText;
+        }
+      } else {
+        generationResults.push(
+          "System warning: Received completely empty response from the executor.",
+        );
       }
       conversationHistory = geminiExecutor.history;
     }
@@ -939,7 +960,7 @@ class MCPApp {
       params_: {
         without_function: {
           description:
-            "Use this exclusively if existing functions cannot natively fulfill the request context. Solve the task dynamically.",
+            "Use this exclusively to provide the final conversational response to the user when other tools cannot resolve the task. Do NOT use this to confirm task completion. Output only the final answer.",
           parameters: {
             type: "object",
             properties: {
@@ -949,7 +970,8 @@ class MCPApp {
               },
               response: {
                 type: "string",
-                description: "Generated standard AI conversational response.",
+                description:
+                  "The final answer or conversational response to the user.",
               },
             },
             required: ["task", "response"],
@@ -1184,7 +1206,6 @@ class MCPApp {
 
             if (subKey === "resources") {
               toolMetadata = { title: name, description };
-              // Note: Arrow functions inherently bind `this` to the class, resolving jsonrpc context issues.
               executionCallback = () => {
                 console.log(`--- Fetching Resource Execution: ${cleanName}`);
                 const dispatchPayload = {

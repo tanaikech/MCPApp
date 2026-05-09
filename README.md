@@ -77,4 +77,7 @@ This repository introduces two directions:
 - v2.0.10 (May 9, 2026)
   1. Refactored MCPApp.
 
+- v2.0.11 (May 9, 2026)
+  1. A bug was removed.
+
 [TOP](#top)
