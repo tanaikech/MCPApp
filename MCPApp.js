@@ -2,16 +2,16 @@
  * Class object for MCP (Model Context Protocol).
  * Author: Kanshi Tanaike
  * Refactored by: Senior Generative AI & MCP Expert
- * Version: 2.0.11
- * Date: 2026-05-09 15:48
+ * Version: 2.1.0
+ * Date: 2026-05-10 12:00
  * @class
  */
 class MCPApp {
   /**
    * @param {Object} object - Object used to initialize this script.
    * @param {string} [object.accessKey=null] - Default is null. Used for accessing the Web Apps.
-   * @param {boolean} [object.log=false] - Default is false. When true, the log between the MCP client and server is stored in Google Sheets.
-   * @param {string}[object.spreadsheetId] - Spreadsheet ID. Logs are stored in the "log" sheet of this spreadsheet.
+   * @param {boolean}[object.log=false] - Default is false. When true, the log between the MCP client and server is stored in Google Sheets.
+   * @param {string} [object.spreadsheetId] - Spreadsheet ID. Logs are stored in the "log" sheet of this spreadsheet.
    * @param {boolean} [object.lock=true] - Default is true. By default, the script runs with LockService to prevent concurrency issues.
    * @return {MCPApp}
    */
@@ -40,7 +40,7 @@ class MCPApp {
     };
 
     /** @private */
-    this.protocolVersion = "2024-11-05"; // Alternatively "2025-03-26"
+    this.protocolVersion = "2024-11-05";
 
     /** @private */
     this.jsonrpc = "2.0";
@@ -82,7 +82,7 @@ class MCPApp {
    *
    * @param {Object} services - Object containing the services you want to use.
    * @param {GoogleAppsScript.Lock.Lock} [services.lock] - Instance of LockService (e.g., getScriptLock()).
-   * @param {GoogleAppsScript.Properties.Properties} [services.properties] - Instance of PropertiesService.
+   * @param {GoogleAppsScript.Properties.Properties}[services.properties] - Instance of PropertiesService.
    * @return {MCPApp}
    */
   setServices(services = {}) {
@@ -106,9 +106,9 @@ class MCPApp {
    *
    * @param {Object} object - Execution object.
    * @param {Object} object.eventObject - Event object from the doPost function.
-   * @param {Object} object.serverResponse - Object structured for the server response.
-   * @param {Object} object.functions - Functions mapped for usage via tools/call.
-   * @param {Array}  object.items - Items including server responses and functions.
+   * @param {Object} [object.serverResponse] - Object structured for the server response.
+   * @param {Object} [object.functions] - Functions mapped for usage via tools/call.
+   * @param {Array}  [object.items] - Items including server responses and functions.
    * @return {GoogleAppsScript.Content.TextOutput}
    */
   server(object = {}) {
@@ -132,8 +132,10 @@ class MCPApp {
 
     try {
       return this.serverMain_(object);
-    } catch ({ stack }) {
-      throw new Error(`Server Execution Error: ${stack}`);
+    } catch (error) {
+      throw new Error(
+        `Server Execution Error: ${error.stack || String(error)}`,
+      );
     }
   }
 
@@ -168,8 +170,10 @@ class MCPApp {
     }
     try {
       return this.serverMain_(object);
-    } catch ({ stack }) {
-      throw new Error(`Locked Execution Error: ${stack}`);
+    } catch (error) {
+      throw new Error(
+        `Locked Execution Error: ${error.stack || String(error)}`,
+      );
     } finally {
       lock.releaseLock();
     }
@@ -251,9 +255,12 @@ class MCPApp {
             retObj.result?.messages,
             obj.params?.arguments,
           );
-        } catch ({ stack }) {
+        } catch (error) {
           retObj = {
-            error: { code: this.ErrorCode.InternalError, message: stack },
+            error: {
+              code: this.ErrorCode.InternalError,
+              message: error.stack || String(error),
+            },
             jsonrpc: this.jsonrpc,
           };
         }
@@ -307,7 +314,17 @@ class MCPApp {
 
         if (paramName && funcGroup[paramName]) {
           retObj = funcGroup[paramName](obj.params?.arguments || null);
-          if (
+
+          // --- APPROACH A ENHANCEMENT: Smart response wrapper ---
+          if (typeof retObj === "string") {
+            retObj = {
+              jsonrpc: this.jsonrpc,
+              result: {
+                content: [{ type: "text", text: retObj }],
+                isError: false,
+              },
+            };
+          } else if (
             retObj?.result &&
             typeof retObj.result === "string" &&
             Object.keys(retObj).length === 1
@@ -321,7 +338,10 @@ class MCPApp {
             };
           } else if (retObj?.mcp) {
             retObj = retObj.mcp;
+          } else if (retObj && !retObj.jsonrpc && !retObj.error) {
+            retObj = { jsonrpc: this.jsonrpc, result: retObj };
           }
+          // --------------------------------------------------------
         } else if (paramUri && funcGroup[paramUri]) {
           retObj = funcGroup[paramUri]();
         } else {
@@ -333,12 +353,16 @@ class MCPApp {
             jsonrpc: this.jsonrpc,
           };
         }
-      } catch ({ stack }) {
+      } catch (error) {
         retObj = {
-          error: { code: this.ErrorCode.InternalError, message: stack },
+          error: {
+            code: this.ErrorCode.InternalError,
+            message: error.stack || String(error),
+          },
           jsonrpc: this.jsonrpc,
         };
       }
+
       retObj.id = id;
       this.values.push([
         this.date,
@@ -427,7 +451,9 @@ class MCPApp {
         const type = e.type;
         const name = e.value?.name;
         if (!lockedTypes.includes(type) && name && itemSet.has(name)) {
-          console.warn(`Item "${name}" is duplicated and will be ignored.`);
+          console.warn(
+            `System warning: Item "${name}" is duplicated and will be ignored.`,
+          );
         } else {
           if (name) itemSet.add(name);
           duplicateChecked.push(e);
@@ -498,7 +524,16 @@ class MCPApp {
           if ("function" in e) {
             const callKey = `${rootKey}/call`;
             acc.functions[callKey] = acc.functions[callKey] || {};
-            acc.functions[callKey][e.function.name] = e.function;
+
+            // --- APPROACH A ENHANCEMENT: Safely extract function name ---
+            const funcName = e.value?.name || e.function?.name;
+            if (funcName) {
+              acc.functions[callKey][funcName] = e.function;
+            } else {
+              console.warn(
+                `System warning: Function name could not be resolved for type ${type}.`,
+              );
+            }
           }
           return acc;
         },
@@ -559,8 +594,8 @@ class MCPApp {
    * @param {string[]} [object.mcpServerUrls=[]] - Valid URLs of the targeted MCP servers.
    * @param {boolean}[object.batchProcess=false] - If true, enables batch request processing towards the servers.
    * @param {Object}[object.functions] - Custom client-side tools/functions.
-   * @param {Array}[object.history] - Chat history array for continuous conversation.
-   * @param {Array}[object.mcpServerObj] - MCP Servers installed directly as libraries.
+   * @param {Array} [object.history] - Chat history array for continuous conversation.
+   * @param {Array} [object.mcpServerObj] - MCP Servers installed directly as libraries.
    * @return {MCPApp}
    */
   client(object = {}) {
@@ -816,7 +851,9 @@ class MCPApp {
             }
           }
         } catch (error) {
-          console.warn(`Execution Response Parse Error: ${error.stack}`);
+          console.warn(
+            `Execution Response Parse Error: ${error.stack || String(error)}`,
+          );
           generationResults.push(res.functionResponse);
           const lastHistoryPart =
             geminiExecutor.history[geminiExecutor.history.length - 1]
@@ -855,7 +892,7 @@ class MCPApp {
       if (output?.data) {
         const fileBlob = Utilities.newBlob(
           Utilities.base64Decode(output.data),
-          output.mimeType,
+          output.mimeType || "application/octet-stream",
           "downloaded_file",
         );
         return [
@@ -1048,6 +1085,7 @@ class MCPApp {
       url: fullUrl,
       payload: obj,
       muteHttpExceptions: true,
+      contentType: "application/json",
     };
 
     // Authenticate if connecting to GAS-deployed executions
