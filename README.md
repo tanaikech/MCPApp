@@ -83,4 +83,7 @@ This repository introduces two directions:
 - v2.1.0 (May 10, 2026)
   1. A bug was removed.
 
+- v2.1.1 (May 12, 2026)
+  1. A bug was removed.
+
 [TOP](#top)
