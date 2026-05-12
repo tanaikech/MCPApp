@@ -2,11 +2,12 @@
  * Class object for MCP (Model Context Protocol).
  * Author: Kanshi Tanaike
  * Refactored by: Senior Generative AI & MCP Expert
- * Version: 2.1.0
- * Date: 2026-05-10 12:00
+ * Version: 2.1.2
+ * Date: 2026-05-12 12:00
+ * GitHub: https://github.com/tanaikech/MCPApp
  * @class
  */
-class MCPApp {
+var MCPApp = class MCPApp {
   /**
    * @param {Object} object - Object used to initialize this script.
    * @param {string} [object.accessKey=null] - Default is null. Used for accessing the Web Apps.
@@ -1673,4 +1674,4 @@ class MCPApp {
       )
       .setValues(sanitizedData);
   }
-}
+};
