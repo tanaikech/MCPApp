@@ -16,6 +16,32 @@ This repository introduces two directions:
 1.  [An **MCP server** built with Google Apps Script for Gemini CLI and other MCP clients.](simpleMCPserver.md)
 2.  [An **MCP network** built with Google Apps Script.](buildMCPNetwork.md)
 
+# Sample curl commands for testing MCP server
+
+## initialize
+
+```json
+curl -L "<YOUR_MCP_SERVER_URL>" -d '{"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"sample-mcp-client","version":"0.0.0"}},"jsonrpc":"2.0","id":0}'
+```
+
+## tools/list
+
+```json
+curl -L "<YOUR_MCP_SERVER_URL>" -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+```
+
+## prompts/list
+
+```json
+curl -L "<YOUR_MCP_SERVER_URL>" -d '{"jsonrpc":"2.0","id":1,"method":"prompts/list","params":{}}'
+```
+
+## tools/call
+
+```json
+curl -L "<YOUR_MCP_SERVER_URL>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"<TOOL_NAME>","arguments":{<ARGUMENTS_FOR_TOOL>}}}'
+```
+
 ---
 
 <a name="licence"></a>
