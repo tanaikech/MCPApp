@@ -115,4 +115,7 @@ curl -L "<YOUR_MCP_SERVER_URL>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call
 - v2.1.2 (May 12, 2026)
   1. Modified
 
+- v2.1.7 (May 15, 2026)
+  1. Several bugs were removed.
+
 [TOP](#top)

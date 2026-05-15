@@ -2,8 +2,8 @@
  * Class object for MCP (Model Context Protocol).
  * Author: Kanshi Tanaike
  * Refactored by: Senior Generative AI & MCP Expert
- * Version: 2.1.2
- * Date: 2026-05-12 12:00
+ * Version: 2.1.7
+ * Date: 2026-05-15 15:31
  * GitHub: https://github.com/tanaikech/MCPApp
  * @class
  */
@@ -316,7 +316,7 @@ var MCPApp = class MCPApp {
         if (paramName && funcGroup[paramName]) {
           retObj = funcGroup[paramName](obj.params?.arguments || null);
 
-          // --- APPROACH A ENHANCEMENT: Smart response wrapper ---
+          // --- Smart response wrapper ---
           if (typeof retObj === "string") {
             retObj = {
               jsonrpc: this.jsonrpc,
@@ -342,7 +342,6 @@ var MCPApp = class MCPApp {
           } else if (retObj && !retObj.jsonrpc && !retObj.error) {
             retObj = { jsonrpc: this.jsonrpc, result: retObj };
           }
-          // --------------------------------------------------------
         } else if (paramUri && funcGroup[paramUri]) {
           retObj = funcGroup[paramUri]();
         } else {
@@ -526,7 +525,7 @@ var MCPApp = class MCPApp {
             const callKey = `${rootKey}/call`;
             acc.functions[callKey] = acc.functions[callKey] || {};
 
-            // --- APPROACH A ENHANCEMENT: Safely extract function name ---
+            // Safely extract function name
             const funcName = e.value?.name || e.function?.name;
             if (funcName) {
               acc.functions[callKey][funcName] = e.function;
@@ -593,7 +592,7 @@ var MCPApp = class MCPApp {
    * @param {string} object.apiKey - API key for the Gemini API.
    * @param {string} object.prompt - Input prompt targeting the agent.
    * @param {string[]} [object.mcpServerUrls=[]] - Valid URLs of the targeted MCP servers.
-   * @param {boolean}[object.batchProcess=false] - If true, enables batch request processing towards the servers.
+   * @param {boolean}[object.batchProcess=false] - If true, enables high-speed concurrent network requests bypassing JSON-RPC array routing limitations.
    * @param {Object}[object.functions] - Custom client-side tools/functions.
    * @param {Array} [object.history] - Chat history array for continuous conversation.
    * @param {Array} [object.mcpServerObj] - MCP Servers installed directly as libraries.
@@ -677,6 +676,7 @@ var MCPApp = class MCPApp {
       "</Mission>",
       "<Important>",
       "- Never fabricate responses. Output strictly factual resolutions based on functions or core knowledge.",
+      "- DO NOT invent or hallucinate function names. Use EXACTLY the names provided in the <Functions> list.",
       "- Ask the user for clarification if the request is irreconcilably vague.",
       "- Do NOT output or suggest executable code (e.g., 'tool_code' blocks). Only provide the requested format.",
       `- Ensure all allocated tasks are terminal. Do not instruct the model to verify task completion or delivery status.`,
@@ -749,13 +749,15 @@ var MCPApp = class MCPApp {
     console.log("--- start: Sequence Execution.");
 
     let conversationHistory = this.clientObject.history || [];
+    
     const executionSystemInstruction = [
-      "You are an expert executor responsible for evaluating individual function parameters using function calling.",
+      "You are an expert executor responsible for completing a SINGLE step within a larger orchestration pipeline.",
       "<Mission>",
       "- Evaluate the required function syntax and current objective.",
-      "- Construct appropriate function arguments extrapolating from task instructions and conversation history.",
-      `- Invoke "without_function" exclusively to output the final answer to the user.`,
-      `- Once you have generated the final response using "without_function", finish the process immediately without confirming completion.`,
+      "- Construct appropriate function arguments extrapolating from the specific task instructions.",
+      `- You must ONLY focus on the "Current execution objective". Do not attempt to complete the entire user request unless your specific objective tells you to do so.`,
+      `- If your specific objective requires generating the final text response to the user, invoke "without_function" exclusively.`,
+      `- Once you have generated a response using "without_function", finish the process immediately.`,
       `- If executing "check_process", thoroughly evaluate previous results to determine whether processing should halt or proceed.`,
       "</Mission>",
       "<Important>",
@@ -775,9 +777,23 @@ var MCPApp = class MCPApp {
       console.log(`--- Executing function: "${name}" | Objective: "${task}"`);
 
       const funcCallWrapper = {
-        params_: { [name]: this.functions.params_[name] },
+        params_: {
+          [name]: this.functions.params_[name],
+        },
         [name]: this.functions[name],
       };
+
+      if (name !== "without_function" && this.functions.params_["without_function"]) {
+        funcCallWrapper.params_["without_function"] = this.functions.params_["without_function"];
+        funcCallWrapper["without_function"] = this.functions["without_function"];
+      }
+      
+      if (name !== "check_process" && this.functions.params_["check_process"]) {
+        funcCallWrapper.params_["check_process"] = this.functions.params_["check_process"];
+        funcCallWrapper["check_process"] = this.functions["check_process"];
+      }
+
+      const allowedTools = Array.from(new Set([name, "without_function", "check_process"]));
 
       const executeObj = {
         apiKey: this.clientObject.apiKey,
@@ -791,99 +807,42 @@ var MCPApp = class MCPApp {
         toolConfig: {
           functionCallingConfig: {
             mode: "any",
-            allowedFunctionNames: [name],
+            allowedFunctionNames: allowedTools,
           },
         },
       };
 
       const geminiExecutor = new GeminiWithFiles(executeObj);
       const executionPrompt = `Current execution objective:\n<Task>${task}</Task>`;
+      
+      // Execute inner sequence. Returns standard text OR intercepts _gemini_halt signals safely.
       const res = geminiExecutor.generateContent({ q: executionPrompt });
 
-      if (res && res.functionResponse) {
-        try {
-          if (typeof res.functionResponse === "string") {
-            const funcResObj = JSON.parse(res.functionResponse);
-            if (funcResObj?.result?.content) {
-              generationResults.push(...funcResObj.result.content);
-              const consolidatedText = funcResObj.result.content
-                .filter((item) => item.type === "text")
-                .map((item) => item.text)
-                .join("\n");
-
-              const lastHistoryPart =
-                geminiExecutor.history[geminiExecutor.history.length - 1]
-                  ?.parts?.[0];
-              if (lastHistoryPart?.functionResponse?.response) {
-                lastHistoryPart.functionResponse.response.content =
-                  consolidatedText;
-              }
-            }
-          } else {
-            let compiledMessage = "";
-            const resData = res.functionResponse;
-
-            if (resData.task && resData.result) {
-              if (name === "check_process") {
-                if (resData.result.stopProcess) {
-                  compiledMessage = `Process Halted. Task: ${resData.task}. Reason: ${resData.result.reason}`;
-                  generationResults.push(compiledMessage);
-                  break; // Stop sequential pipeline
-                } else {
-                  compiledMessage = `Task: ${resData.task}. Check passed, process continued.`;
-                }
-              } else {
-                compiledMessage = `Task: ${resData.task}, Result: ${JSON.stringify(resData.result)}`;
-              }
-            } else if (!resData.task && resData.result) {
-              compiledMessage = `Task: ${task}, Result: ${JSON.stringify(resData.result)}`;
-            } else {
-              compiledMessage =
-                "System warning: Empty response derived from tool execution.";
-            }
-
-            generationResults.push(compiledMessage);
-            const lastHistoryPart =
-              geminiExecutor.history[geminiExecutor.history.length - 1]
-                ?.parts?.[0];
-            if (lastHistoryPart?.functionResponse?.response) {
-              lastHistoryPart.functionResponse.response.content =
-                compiledMessage;
-            }
-          }
-        } catch (error) {
-          console.warn(
-            `Execution Response Parse Error: ${error.stack || String(error)}`,
-          );
-          generationResults.push(res.functionResponse);
-          const lastHistoryPart =
-            geminiExecutor.history[geminiExecutor.history.length - 1]
-              ?.parts?.[0];
-          if (lastHistoryPart?.functionResponse?.response) {
-            lastHistoryPart.functionResponse.response.content =
-              res.functionResponse;
-          }
+      // Cleaned up, robust Halt Signal evaluation
+      if (res && typeof res === "object" && res._gemini_halt) {
+        if (res.handler === "check_process" && res.result?.stopProcess) {
+          const compiledMessage = `Process Halted. Task: ${res.task || task}. Reason: ${res.result.reason}`;
+          generationResults.push(compiledMessage);
+          console.log(compiledMessage);
+          break; // Stop sequential pipeline entirely
+        } else if (res.handler === "without_function") {
+          const compiledMessage = typeof res.result === "string" ? res.result : JSON.stringify(res.result);
+          generationResults.push(compiledMessage);
+          break; // Stop sequential pipeline entirely
         }
       } else if (res) {
-        // Fallback catch: Model abandoned function calling, exhausted limits, or returned a raw text structure.
-        console.warn(
-          `Execution Warning: Missing functionResponse. Model returned standard text or was aborted.`,
-        );
-        const fallbackText =
-          typeof res === "string" ? res : res.text || JSON.stringify(res);
+        console.log(`Execution Info: Model resolved task to standard conversational text (No further function calls).`);
+        const fallbackText = typeof res === "string" ? res : res.text || JSON.stringify(res);
         generationResults.push(fallbackText);
 
-        // Attempt to clean up the history if it reflects the aborted structure
-        const lastHistoryPart =
-          geminiExecutor.history[geminiExecutor.history.length - 1]?.parts?.[0];
+        const lastHistoryPart = geminiExecutor.history[geminiExecutor.history.length - 1]?.parts?.[0];
         if (lastHistoryPart && !lastHistoryPart.functionResponse) {
           lastHistoryPart.text = fallbackText;
         }
       } else {
-        generationResults.push(
-          "System warning: Received completely empty response from the executor.",
-        );
+        generationResults.push("System warning: Received completely empty response from the executor.");
       }
+      
       conversationHistory = geminiExecutor.history;
     }
 
@@ -1040,17 +999,18 @@ var MCPApp = class MCPApp {
           },
         },
       },
+      // INJECTS: _gemini_halt to force GeminiWithFiles loop break cleanly.
       without_function: ({ task, response }) => {
         console.log(
           `--- Executing intrinsic handler: without_function | Prompt: ${task}`,
         );
-        return { task, result: response };
+        return { _gemini_halt: true, handler: "without_function", task, result: response };
       },
       check_process: ({ stopProcess, task, reason }) => {
         console.log(
           `--- Check Process Triggered | Task: ${task} | Halting: ${stopProcess} | Reason: ${reason}`,
         );
-        return { task, result: { stopProcess, reason } };
+        return { _gemini_halt: stopProcess, handler: "check_process", task, result: { stopProcess, reason } };
       },
     };
 
@@ -1127,16 +1087,11 @@ var MCPApp = class MCPApp {
    */
   getLists_({ method, requests }) {
     this.fetch_(requests).forEach((response, index) => {
-      const targetUrl = requests[index].url;
-      const matchingServerIndex = this.mcpServerObj.findIndex(
-        (srv) => srv.serverUrl === targetUrl,
-      );
-
-      if (response.getResponseCode() === 200 && matchingServerIndex > -1) {
+      if (response.getResponseCode() === 200) {
         try {
           const parsedRes = JSON.parse(response.getContentText());
           if (parsedRes?.result) {
-            this.mcpServerObj[matchingServerIndex][method] = parsedRes.result;
+            this.mcpServerObj[index][method] = parsedRes;
           }
         } catch (error) {
           // Silent catch to continue loop resilience
@@ -1147,56 +1102,32 @@ var MCPApp = class MCPApp {
 
   /**
    * ### Description
-   * Parses server arrays dynamically using batch processing for execution efficiency.
+   * Parses server arrays dynamically using high-speed concurrent processing for execution efficiency.
+   * Modified to use independent requests instead of JSON-RPC arrays to ensure stable routing compatibility.
    *
    * @param {Object} object
    * @private
    */
   parseBatchProcess_({ mcpServerUrls, reqs }) {
-    const payloadMap = mcpServerUrls.reduce((acc, url) => {
-      acc[url] = { url, payload: [] };
-      return acc;
-    }, {});
+    const requestPool = [];
+    const metadata = [];
 
-    reqs.forEach(({ requests }) => {
-      requests.forEach(({ url, payload }) => {
-        if (payloadMap[url]) {
-          payloadMap[url].payload.push(JSON.parse(payload));
-        }
+    reqs.forEach(({ method, requests }) => {
+      requests.forEach((reqConfig, serverIndex) => {
+        requestPool.push(reqConfig);
+        metadata.push({ method, serverIndex });
       });
     });
 
-    const compiledArray = Object.values(payloadMap).filter(
-      (entry) => entry.payload.length > 0,
-    );
-    const methodIdMapArray = compiledArray.map((entry) =>
-      entry.payload.reduce((mapAcc, { method, id }) => {
-        mapAcc[id] = method;
-        return mapAcc;
-      }, {}),
-    );
-
-    const requestPool = compiledArray.map((entry) =>
-      this.createRequest_({ u: entry.url, obj: JSON.stringify(entry.payload) }),
-    );
-
     if (requestPool.length > 0) {
       this.fetch_(requestPool).forEach((response, i) => {
-        const targetUrl = requestPool[i].url;
-        const matchingServerIndex = this.mcpServerObj.findIndex(
-          (srv) => srv.serverUrl === targetUrl,
-        );
-
-        if (response.getResponseCode() === 200 && matchingServerIndex > -1) {
+        if (response.getResponseCode() === 200) {
           try {
-            const parsedArray = JSON.parse(response.getContentText());
-            parsedArray.forEach((resChunk) => {
-              if (resChunk?.result) {
-                const triggerMethod = methodIdMapArray[i][resChunk.id];
-                this.mcpServerObj[matchingServerIndex][triggerMethod] =
-                  resChunk;
-              }
-            });
+            const { method, serverIndex } = metadata[i];
+            const parsedObj = JSON.parse(response.getContentText());
+            if (parsedObj?.result) {
+              this.mcpServerObj[serverIndex][method] = parsedObj;
+            }
           } catch (error) {
             // Processing failure intentionally omitted for stability.
           }
@@ -1256,7 +1187,7 @@ var MCPApp = class MCPApp {
                 return fetchWrapper({ payload: dispatchPayload, serverUrl });
               };
             } else if (subKey === "prompts") {
-              const propMap = definition.arguments.reduce((mapAcc, argObj) => {
+              const propMap = (definition.arguments || []).reduce((mapAcc, argObj) => {
                 mapAcc[argObj.name.replaceAll(" ", "_").trim()] = {
                   type: "string",
                   description: argObj.description,
@@ -1501,7 +1432,7 @@ var MCPApp = class MCPApp {
       }));
 
       if (batchProcess) {
-        console.log("--- Extracting Tool Lists (Batch Transmission Protocol)");
+        console.log("--- Extracting Tool Lists (Concurrent Transmission Protocol)");
         this.parseBatchProcess_({ mcpServerUrls, reqs: capabilityJobs });
       } else {
         console.log("--- Extracting Tool Lists (Linear Transmission Protocol)");
@@ -1579,7 +1510,6 @@ var MCPApp = class MCPApp {
     if (e?.postData?.contents) {
       return JSON.parse(e.postData.contents);
     }
-    // Implement parameter parsing map if GET protocol structures become permitted.
     return null;
   }
 
