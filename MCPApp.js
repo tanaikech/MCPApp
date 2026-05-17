@@ -749,7 +749,7 @@ var MCPApp = class MCPApp {
     console.log("--- start: Sequence Execution.");
 
     let conversationHistory = this.clientObject.history || [];
-    
+
     const executionSystemInstruction = [
       "You are an expert executor responsible for completing a SINGLE step within a larger orchestration pipeline.",
       "<Mission>",
@@ -783,17 +783,25 @@ var MCPApp = class MCPApp {
         [name]: this.functions[name],
       };
 
-      if (name !== "without_function" && this.functions.params_["without_function"]) {
-        funcCallWrapper.params_["without_function"] = this.functions.params_["without_function"];
-        funcCallWrapper["without_function"] = this.functions["without_function"];
+      if (
+        name !== "without_function" &&
+        this.functions.params_["without_function"]
+      ) {
+        funcCallWrapper.params_["without_function"] =
+          this.functions.params_["without_function"];
+        funcCallWrapper["without_function"] =
+          this.functions["without_function"];
       }
-      
+
       if (name !== "check_process" && this.functions.params_["check_process"]) {
-        funcCallWrapper.params_["check_process"] = this.functions.params_["check_process"];
+        funcCallWrapper.params_["check_process"] =
+          this.functions.params_["check_process"];
         funcCallWrapper["check_process"] = this.functions["check_process"];
       }
 
-      const allowedTools = Array.from(new Set([name, "without_function", "check_process"]));
+      const allowedTools = Array.from(
+        new Set([name, "without_function", "check_process"]),
+      );
 
       const executeObj = {
         apiKey: this.clientObject.apiKey,
@@ -814,7 +822,7 @@ var MCPApp = class MCPApp {
 
       const geminiExecutor = new GeminiWithFiles(executeObj);
       const executionPrompt = `Current execution objective:\n<Task>${task}</Task>`;
-      
+
       // Execute inner sequence. Returns standard text OR intercepts _gemini_halt signals safely.
       const res = geminiExecutor.generateContent({ q: executionPrompt });
 
@@ -826,23 +834,32 @@ var MCPApp = class MCPApp {
           console.log(compiledMessage);
           break; // Stop sequential pipeline entirely
         } else if (res.handler === "without_function") {
-          const compiledMessage = typeof res.result === "string" ? res.result : JSON.stringify(res.result);
+          const compiledMessage =
+            typeof res.result === "string"
+              ? res.result
+              : JSON.stringify(res.result);
           generationResults.push(compiledMessage);
           break; // Stop sequential pipeline entirely
         }
       } else if (res) {
-        console.log(`Execution Info: Model resolved task to standard conversational text (No further function calls).`);
-        const fallbackText = typeof res === "string" ? res : res.text || JSON.stringify(res);
+        console.log(
+          `Execution Info: Model resolved task to standard conversational text (No further function calls).`,
+        );
+        const fallbackText =
+          typeof res === "string" ? res : res.text || JSON.stringify(res);
         generationResults.push(fallbackText);
 
-        const lastHistoryPart = geminiExecutor.history[geminiExecutor.history.length - 1]?.parts?.[0];
+        const lastHistoryPart =
+          geminiExecutor.history[geminiExecutor.history.length - 1]?.parts?.[0];
         if (lastHistoryPart && !lastHistoryPart.functionResponse) {
           lastHistoryPart.text = fallbackText;
         }
       } else {
-        generationResults.push("System warning: Received completely empty response from the executor.");
+        generationResults.push(
+          "System warning: Received completely empty response from the executor.",
+        );
       }
-      
+
       conversationHistory = geminiExecutor.history;
     }
 
@@ -1004,13 +1021,23 @@ var MCPApp = class MCPApp {
         console.log(
           `--- Executing intrinsic handler: without_function | Prompt: ${task}`,
         );
-        return { _gemini_halt: true, handler: "without_function", task, result: response };
+        return {
+          _gemini_halt: true,
+          handler: "without_function",
+          task,
+          result: response,
+        };
       },
       check_process: ({ stopProcess, task, reason }) => {
         console.log(
           `--- Check Process Triggered | Task: ${task} | Halting: ${stopProcess} | Reason: ${reason}`,
         );
-        return { _gemini_halt: stopProcess, handler: "check_process", task, result: { stopProcess, reason } };
+        return {
+          _gemini_halt: stopProcess,
+          handler: "check_process",
+          task,
+          result: { stopProcess, reason },
+        };
       },
     };
 
@@ -1187,13 +1214,16 @@ var MCPApp = class MCPApp {
                 return fetchWrapper({ payload: dispatchPayload, serverUrl });
               };
             } else if (subKey === "prompts") {
-              const propMap = (definition.arguments || []).reduce((mapAcc, argObj) => {
-                mapAcc[argObj.name.replaceAll(" ", "_").trim()] = {
-                  type: "string",
-                  description: argObj.description,
-                };
-                return mapAcc;
-              }, {});
+              const propMap = (definition.arguments || []).reduce(
+                (mapAcc, argObj) => {
+                  mapAcc[argObj.name.replaceAll(" ", "_").trim()] = {
+                    type: "string",
+                    description: argObj.description,
+                  };
+                  return mapAcc;
+                },
+                {},
+              );
 
               toolMetadata = {
                 title: name,
@@ -1432,7 +1462,9 @@ var MCPApp = class MCPApp {
       }));
 
       if (batchProcess) {
-        console.log("--- Extracting Tool Lists (Concurrent Transmission Protocol)");
+        console.log(
+          "--- Extracting Tool Lists (Concurrent Transmission Protocol)",
+        );
         this.parseBatchProcess_({ mcpServerUrls, reqs: capabilityJobs });
       } else {
         console.log("--- Extracting Tool Lists (Linear Transmission Protocol)");
