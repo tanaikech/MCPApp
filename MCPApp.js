@@ -2,8 +2,8 @@
  * Class object for MCP (Model Context Protocol).
  * Author: Kanshi Tanaike
  * Refactored by: Senior Generative AI & MCP Expert
- * Version: 2.1.7
- * Date: 2026-05-15 15:31
+ * Version: 2.2.0
+ * Date: 2026-05-19
  * GitHub: https://github.com/tanaikech/MCPApp
  * @class
  */
@@ -591,7 +591,7 @@ var MCPApp = class MCPApp {
    * @param {Object} object - Configuration parameters.
    * @param {string} object.apiKey - API key for the Gemini API.
    * @param {string} object.prompt - Input prompt targeting the agent.
-   * @param {string[]} [object.mcpServerUrls=[]] - Valid URLs of the targeted MCP servers.
+   * @param {Array<string|Object>} [object.mcpServerUrls=[]] - Valid URLs or custom Header objects targeting MCP servers.
    * @param {boolean}[object.batchProcess=false] - If true, enables high-speed concurrent network requests bypassing JSON-RPC array routing limitations.
    * @param {Object}[object.functions] - Custom client-side tools/functions.
    * @param {Array} [object.history] - Chat history array for continuous conversation.
@@ -1057,13 +1057,16 @@ var MCPApp = class MCPApp {
 
   /**
    * ### Description
-   * Constructs network requests properly routing standard URLs vs GAS Web Apps.
+   * Constructs network requests properly routing standard URLs vs GAS Web Apps with customizable headers.
    *
    * @param {Object} object
+   * @param {string} object.u - URL to request.
+   * @param {Object|string} object.obj - JSON payload to send.
+   * @param {Object} [object.customHeaders={}] - Specific headers bound to the MCP server.
    * @return {Object} Valid configurations for UrlFetchApp.
    * @private
    */
-  createRequest_({ u, obj }) {
+  createRequest_({ u, obj, customHeaders = {} }) {
     const rawUrl = u.trim();
     const { url, queryParameters } = this.parseQueryParameters_(rawUrl);
     const urlSegment = url.split("/").pop();
@@ -1076,9 +1079,20 @@ var MCPApp = class MCPApp {
       contentType: "application/json",
     };
 
+    let activeHeaders = {};
+
     // Authenticate if connecting to GAS-deployed executions
     if (["exec", "dev"].includes(urlSegment)) {
-      requestConfig.headers = this.headers;
+      activeHeaders = { ...this.headers };
+    }
+
+    // Merge explicitly provided custom server headers
+    if (customHeaders && Object.keys(customHeaders).length > 0) {
+      activeHeaders = { ...activeHeaders, ...customHeaders };
+    }
+
+    if (Object.keys(activeHeaders).length > 0) {
+      requestConfig.headers = activeHeaders;
     }
 
     return requestConfig;
@@ -1100,8 +1114,8 @@ var MCPApp = class MCPApp {
       jsonrpc: this.jsonrpc,
       id: this.id,
     });
-    return this.mcpServerObj.map(({ serverUrl }) =>
-      this.createRequest_({ u: serverUrl, obj: payloadStr }),
+    return this.mcpServerObj.map(({ serverUrl, headers }) =>
+      this.createRequest_({ u: serverUrl, obj: payloadStr, customHeaders: headers }),
     );
   }
 
@@ -1178,16 +1192,16 @@ var MCPApp = class MCPApp {
     };
     const validEndpoints = Object.keys(routingMap);
 
-    const fetchWrapper = ({ payload, serverUrl }) => {
+    const fetchWrapper = ({ payload, serverUrl, customHeaders }) => {
       const responseArray = this.fetch_([
-        this.createRequest_({ u: serverUrl, obj: JSON.stringify(payload) }),
+        this.createRequest_({ u: serverUrl, obj: JSON.stringify(payload), customHeaders }),
       ]);
       return responseArray[0].getContentText();
     };
 
     const aggregatedServerTools = this.mcpServerObj.reduce(
       (accumulator, serverEntry) => {
-        const { serverUrl } = serverEntry;
+        const { serverUrl, headers } = serverEntry;
 
         validEndpoints.forEach((endpointKey) => {
           const subKey = endpointKey.split("/")[0];
@@ -1211,7 +1225,7 @@ var MCPApp = class MCPApp {
                   jsonrpc: this.jsonrpc,
                   id: this.id++,
                 };
-                return fetchWrapper({ payload: dispatchPayload, serverUrl });
+                return fetchWrapper({ payload: dispatchPayload, serverUrl, customHeaders: headers });
               };
             } else if (subKey === "prompts") {
               const propMap = (definition.arguments || []).reduce(
@@ -1242,7 +1256,7 @@ var MCPApp = class MCPApp {
                   jsonrpc: this.jsonrpc,
                   id: this.id++,
                 };
-                return fetchWrapper({ payload: dispatchPayload, serverUrl });
+                return fetchWrapper({ payload: dispatchPayload, serverUrl, customHeaders: headers });
               };
             } else if (subKey === "tools") {
               toolMetadata = {
@@ -1258,7 +1272,7 @@ var MCPApp = class MCPApp {
                   jsonrpc: this.jsonrpc,
                   id: this.id++,
                 };
-                return fetchWrapper({ payload: dispatchPayload, serverUrl });
+                return fetchWrapper({ payload: dispatchPayload, serverUrl, customHeaders: headers });
               };
             }
 
@@ -1347,7 +1361,21 @@ var MCPApp = class MCPApp {
       }
     }
 
-    if (Array.isArray(mcpServerUrls) && mcpServerUrls.length > 0) {
+    // Dynamic normalization validating both traditional raw strings and object configurations
+    const validServers = (mcpServerUrls || []).reduce((acc, item) => {
+      if (typeof item === 'string' && item.trim() !== '') {
+        acc.push({ serverUrl: item.trim(), headers: {}, original: item });
+      } else if (typeof item === 'object' && item !== null) {
+        const key = Object.keys(item)[0];
+        const val = item[key];
+        if (val && val.httpUrl) {
+          acc.push({ serverUrl: val.httpUrl.trim(), headers: val.headers || {}, original: item });
+        }
+      }
+      return acc;
+    }, []);
+
+    if (validServers.length > 0) {
       // Execute Protocol Initializations
       const methodInit = "initialize";
       console.log(`--- Executing Handshake: ${methodInit} (Client --> Server)`);
@@ -1363,8 +1391,8 @@ var MCPApp = class MCPApp {
         id: ++this.id,
       };
 
-      const requestsInit = mcpServerUrls.map((url) =>
-        this.createRequest_({ u: url, obj: JSON.stringify(payloadInit) }),
+      const requestsInit = validServers.map((n) =>
+        this.createRequest_({ u: n.serverUrl, obj: JSON.stringify(payloadInit), customHeaders: n.headers }),
       );
 
       this.mcpServerObj = this.fetch_(requestsInit).reduce(
@@ -1380,15 +1408,19 @@ var MCPApp = class MCPApp {
             ]);
             try {
               acc.push({
-                serverUrl: mcpServerUrls[idx].trim(),
+                serverUrl: validServers[idx].serverUrl,
+                headers: validServers[idx].headers,
+                original: validServers[idx].original,
                 [methodInit]: JSON.parse(bodyText),
               });
             } catch (e) {
               console.warn(
-                `Critical Format Error. Payload from "${mcpServerUrls[idx]}" is not standard MCP JSON. Snippet: ${bodyText.substring(0, 50)}...`,
+                `Critical Format Error. Payload from "${validServers[idx].serverUrl}" is not standard MCP JSON. Snippet: ${bodyText.substring(0, 50)}...`,
               );
               acc.push({
-                serverUrl: mcpServerUrls[idx].trim(),
+                serverUrl: validServers[idx].serverUrl,
+                headers: validServers[idx].headers,
+                original: validServers[idx].original,
                 [methodInit]: null,
               });
             }
@@ -1427,7 +1459,7 @@ var MCPApp = class MCPApp {
             ? acc.notifiedReqs
             : acc.canceledReqs;
           configTarget.push(
-            this.createRequest_({ u: serverObj.serverUrl, obj: payloadStr }),
+            this.createRequest_({ u: serverObj.serverUrl, obj: payloadStr, customHeaders: serverObj.headers }),
           );
           return acc;
         },

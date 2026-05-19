@@ -118,4 +118,7 @@ curl -L "<YOUR_MCP_SERVER_URL>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call
 - v2.1.7 (May 15, 2026)
   1. Several bugs were removed.
 
+- v2.2.0 (May 19, 2026)
+  1. `const mcpServers = ["mcp-url-1", { "mcp-server-name": { "httpUrl": "https://mcp-url-2", "headers": { "key": "value" } } }]` can be used for using MCP servers.
+
 [TOP](#top)
