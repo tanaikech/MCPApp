@@ -121,4 +121,8 @@ curl -L "<YOUR_MCP_SERVER_URL>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call
 - v2.2.0 (May 19, 2026)
   1. `const mcpServers = ["mcp-url-1", { "mcp-server-name": { "httpUrl": "https://mcp-url-2", "headers": { "key": "value" } } }]` can be used for using MCP servers.
 
+- v2.3.0 (June 10, 2026)
+  1. Added multi-channel sheet logging. When a spreadsheet ID is specified, logs are stored in the "MCP" sheet; otherwise, the "log" sheet is used. Headers `["Date", "Method", "ID", "Direction", "Message"]` are automatically created with formatting, and sheets are initialized thread-safely under LockService lock.
+  2. Enhanced error messaging by prefixing with `[MCP Server Error]` or `[MCP Client Error]` to simplify debugging.
+
 [TOP](#top)
