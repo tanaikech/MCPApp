@@ -5,6 +5,15 @@
 
 [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/tanaikech-mcpapp-badge.png)](https://mseep.ai/app/tanaikech-mcpapp)
 
+---
+
+### 🚀 **Special Announcement: Integrated with GASADK!**
+**MCPApp** is now fully supported and can be used directly from [GASADK](https://github.com/tanaikech/adk-gas) (Google Apps Script Agent Development Kit). GASADK provides a comprehensive framework for building powerful multi-agent systems and utilizing MCP tools seamlessly in Google Apps Script. 
+
+👉 **Check out [GASADK on GitHub](https://github.com/tanaikech/adk-gas) to boost your development!**
+
+---
+
 <a name="overview"></a>
 
 # Overview
