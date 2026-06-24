@@ -134,4 +134,8 @@ curl -L "<YOUR_MCP_SERVER_URL>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call
   1. Added multi-channel sheet logging. When a spreadsheet ID is specified, logs are stored in the "MCP" sheet; otherwise, the "log" sheet is used. Headers `["Date", "Method", "ID", "Direction", "Message"]` are automatically created with formatting, and sheets are initialized thread-safely under LockService lock.
   2. Enhanced error messaging by prefixing with `[MCP Server Error]` or `[MCP Client Error]` to simplify debugging.
 
+- v2.4.0 (June 24, 2026)
+  1. Upgraded default model to `models/gemini-3.1-flash-lite`.
+  2. Integrated `GasHookManager` compatibility to support BeforeTool and AfterTool hooks on the MCP server side.
+
 [TOP](#top)

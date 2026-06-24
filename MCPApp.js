@@ -2,7 +2,7 @@
  * Class object for MCP (Model Context Protocol).
  * Author: Kanshi Tanaike
  * Refactored by: Senior Generative AI & MCP Expert
- * Version: 2.3.0 (Multi-Channel Sheet Logging Update)
+ * Version: 2.4.0 (Hooks System & Modern Model Update)
  * Date: 2026-06-10
  * GitHub: https://github.com/tanaikech/MCPApp
  * @class
@@ -22,7 +22,11 @@ var MCPApp = class MCPApp {
       log = false,
       spreadsheetId = null,
       lock = true,
+      model,
     } = object;
+
+    /** @private */
+    this.model = model || "models/gemini-3.1-flash-lite";
 
     /** @private */
     this.accessKey = accessKey;
@@ -643,9 +647,9 @@ var MCPApp = class MCPApp {
     }
 
     this.clientInfo = { name: "MCPApp_client", version: "1.0.0" };
-
+ 
     /** @private */
-    this.model = "models/gemini-3-flash-preview";
+    this.model = object.model || this.model || "models/gemini-3.1-flash-lite";
 
     /** @private */
     this.id = 0;
@@ -1319,6 +1323,22 @@ var MCPApp = class MCPApp {
                 parameters: inputSchema,
               };
               executionCallback = (params) => {
+                if (this.hookManager) {
+                  const beforeRes = this.hookManager.execute("BeforeTool", {
+                    toolName: cleanName,
+                    arguments: params,
+                    source: "mcp_server"
+                  });
+                  if (beforeRes.decision === "deny") {
+                    throw new Error(`[Hook Blocked] Server tool '${cleanName}' execution denied by BeforeTool hook. Reason: ${beforeRes.reason || "Unspecified"}`);
+                  }
+                  if (beforeRes.tool_input?.execution_prompt !== undefined) {
+                    params = beforeRes.tool_input.execution_prompt;
+                  } else if (beforeRes.arguments !== undefined) {
+                    params = beforeRes.arguments;
+                  }
+                }
+
                 console.log(`--- Activating Tool Service: ${cleanName}`);
                 const dispatchPayload = {
                   method: routingMap[endpointKey],
@@ -1326,11 +1346,24 @@ var MCPApp = class MCPApp {
                   jsonrpc: this.jsonrpc,
                   id: this.id++,
                 };
-                return fetchWrapper({
+                let result = fetchWrapper({
                   payload: dispatchPayload,
                   serverUrl,
                   customHeaders: headers,
                 });
+
+                if (this.hookManager) {
+                  const afterRes = this.hookManager.execute("AfterTool", {
+                    toolName: cleanName,
+                    result: result,
+                    source: "mcp_server"
+                  });
+                  if (afterRes.result !== undefined) {
+                    result = afterRes.result;
+                  }
+                }
+
+                return result;
               };
             }
 
@@ -1737,5 +1770,10 @@ var MCPApp = class MCPApp {
         sanitizedData[0].length,
       )
       .setValues(sanitizedData);
+  }
+
+  setHookManager(hookManager) {
+    this.hookManager = hookManager;
+    return this;
   }
 };
